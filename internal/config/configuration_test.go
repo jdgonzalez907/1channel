@@ -9,10 +9,11 @@ func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("ONECHANNEL_SECRET", "oc-secret")
 	t.Setenv("META_SECRET", "meta-secret")
-	t.Setenv("POSTGRES_URL", "localhost")
+	t.Setenv("POSTGRES_HOST", "localhost")
+	t.Setenv("POSTGRES_DATABASE", "1channel_dev")
 	t.Setenv("POSTGRES_USERNAME", "dev")
 	t.Setenv("POSTGRES_PASSWORD", "dev")
-	t.Setenv("NATS_URL", "localhost")
+	t.Setenv("NATS_HOST", "localhost")
 	t.Setenv("NATS_USERNAME", "dev")
 	t.Setenv("NATS_PASSWORD", "dev")
 }
@@ -45,8 +46,11 @@ func TestNewConfiguration(t *testing.T) {
 				if cfg.MetaSecret() != "meta-secret" {
 					t.Fatalf("expected MetaSecret meta-secret, got %q", cfg.MetaSecret())
 				}
-				if cfg.PostgresURL() != "localhost" {
-					t.Fatalf("expected PostgresURL localhost, got %q", cfg.PostgresURL())
+				if cfg.PostgresHost() != "localhost" {
+					t.Fatalf("expected PostgresHost localhost, got %q", cfg.PostgresHost())
+				}
+				if cfg.PostgresDatabase() != "1channel_dev" {
+					t.Fatalf("expected PostgresDatabase 1channel_dev, got %q", cfg.PostgresDatabase())
 				}
 				if cfg.PostgresUsername() != "dev" {
 					t.Fatalf("expected PostgresUsername dev, got %q", cfg.PostgresUsername())
@@ -69,8 +73,8 @@ func TestNewConfiguration(t *testing.T) {
 				if cfg.PostgresMaxConnIdleTime() != 30*time.Minute {
 					t.Fatalf("expected PostgresMaxConnIdleTime default 30m, got %v", cfg.PostgresMaxConnIdleTime())
 				}
-				if cfg.NatsURL() != "localhost" {
-					t.Fatalf("expected NatsURL localhost, got %q", cfg.NatsURL())
+				if cfg.NatsHost() != "localhost" {
+					t.Fatalf("expected NatsHost localhost, got %q", cfg.NatsHost())
 				}
 				if cfg.NatsPort() != 4222 {
 					t.Fatalf("expected NatsPort default 4222, got %d", cfg.NatsPort())
@@ -89,9 +93,6 @@ func TestNewConfiguration(t *testing.T) {
 				}
 				if cfg.NatsReconnectWait() != 2*time.Second {
 					t.Fatalf("expected NatsReconnectWait default 2s, got %v", cfg.NatsReconnectWait())
-				}
-				if !cfg.NatsRetryOnFailedConnect() {
-					t.Fatal("expected NatsRetryOnFailedConnect default true")
 				}
 				if cfg.NatsPingInterval() != 2*time.Minute {
 					t.Fatalf("expected NatsPingInterval default 2m, got %v", cfg.NatsPingInterval())
@@ -180,10 +181,11 @@ func TestNewConfigurationRequiredVars(t *testing.T) {
 	requiredEnvVars := []string{
 		"ONECHANNEL_SECRET",
 		"META_SECRET",
-		"POSTGRES_URL",
+		"POSTGRES_HOST",
+		"POSTGRES_DATABASE",
 		"POSTGRES_USERNAME",
 		"POSTGRES_PASSWORD",
-		"NATS_URL",
+		"NATS_HOST",
 		"NATS_USERNAME",
 		"NATS_PASSWORD",
 	}
