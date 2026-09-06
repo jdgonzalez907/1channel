@@ -11,13 +11,17 @@ import (
 	"time"
 
 	httprouter "github.com/jdgonzalez907/1channel/internal/http"
+	"github.com/jdgonzalez907/1channel/internal/http/middleware"
 	"github.com/jdgonzalez907/1channel/internal/logger"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
 	"github.com/jdgonzalez907/1channel/internal/meta"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout = 10 * time.Second
+	requestTimeout  = 10 * time.Second
+)
 
 func main() {
 	cfg, err := config.NewConfiguration()
@@ -29,6 +33,11 @@ func main() {
 	slog.SetDefault(logger.New(cfg))
 
 	router := httprouter.NewRouter()
+	router.Use(
+		middleware.Recovery(),
+		middleware.Logging(),
+		middleware.Timeout(requestTimeout),
+	)
 	meta.RegisterRoutes(router, cfg)
 
 	server := &http.Server{
