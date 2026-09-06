@@ -12,6 +12,8 @@ type Configuration interface {
 
 	HTTPPort() string
 
+	LogLevel() string
+
 	OneChannelSecret() string
 	MetaSecret() string
 
@@ -38,6 +40,8 @@ type Configuration interface {
 
 type configuration struct {
 	HTTPPortEnv string `env:"HTTP_PORT" envDefault:"8080"`
+
+	LogLevelEnv string `env:"LOG_LEVEL" envDefault:"info"`
 
 	OneChannelSecretEnv string `env:"ONECHANNEL_SECRET,required,notEmpty"`
 	MetaSecretEnv       string `env:"META_SECRET,required,notEmpty"`
@@ -77,6 +81,7 @@ func NewConfiguration() (Configuration, error) {
 
 func (c *configuration) AppName() string                        { return "1channel" }
 func (c *configuration) HTTPPort() string                       { return c.HTTPPortEnv }
+func (c *configuration) LogLevel() string                       { return c.LogLevelEnv }
 func (c *configuration) OneChannelSecret() string               { return c.OneChannelSecretEnv }
 func (c *configuration) MetaSecret() string                     { return c.MetaSecretEnv }
 func (c *configuration) PostgresURL() string                    { return c.PostgresURLEnv }
