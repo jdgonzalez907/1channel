@@ -42,7 +42,8 @@ func (h *EventHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("meta webhook received",
+	slog.Info("meta webhook received")
+	slog.Debug("meta webhook payload",
 		"payload", string(bodyBytes),
 	)
 
