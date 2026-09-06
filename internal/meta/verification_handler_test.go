@@ -1,13 +1,14 @@
 package meta
 
 import (
+	"github.com/jdgonzalez907/1channel/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
 func TestVerificationHandler(t *testing.T) {
-	cfg := fakeConfig{oneChannelSecret: "verify-token"}
+	cfg := config.NewMockSecretsConfiguration("", "verify-token")
 	handler := NewVerificationHandler(cfg)
 
 	tests := []struct {

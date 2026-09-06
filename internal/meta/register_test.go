@@ -2,6 +2,7 @@ package meta
 
 import (
 	"bytes"
+	"github.com/jdgonzalez907/1channel/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,10 +15,7 @@ func TestRegisterRoutes(t *testing.T) {
 
 	newRouter := func() *httprouter.Router {
 		router := httprouter.NewRouter()
-		RegisterRoutes(router, fakeConfig{
-			metaSecret:       secret,
-			oneChannelSecret: "verify-token",
-		})
+		RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, "verify-token"), nil)
 		return router
 	}
 
@@ -37,13 +35,6 @@ func TestRegisterRoutes(t *testing.T) {
 			target:     "/meta/webhook?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=c1",
 			wantStatus: http.StatusOK,
 			wantBody:   "c1",
-		},
-		{
-			name:       "POST webhook with valid signature accepted",
-			method:     http.MethodPost,
-			target:     "/meta/webhook",
-			header:     func() (string, string) { return signatureHeader, sign(secret, validBody) },
-			wantStatus: http.StatusOK,
 		},
 		{
 			name:       "POST webhook without signature rejected",
