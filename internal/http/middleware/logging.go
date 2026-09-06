@@ -39,8 +39,6 @@ func Logging() Middleware {
 	}
 }
 
-// requestSize returns the declared size when the client sent Content-Length,
-// otherwise the number of body bytes actually consumed by the handler.
 func requestSize(r *http.Request, counter *countingBody) int64 {
 	if r.ContentLength >= 0 {
 		return r.ContentLength
@@ -48,9 +46,6 @@ func requestSize(r *http.Request, counter *countingBody) int64 {
 	return counter.read.Load()
 }
 
-// clientIP prefers the real client address set by the Cloudflare edge
-// (RemoteAddr behind the tunnel is always loopback/bridge), falling back to
-// RemoteAddr without its port.
 func clientIP(r *http.Request) string {
 	if ip := r.Header.Get(cfConnectingIPHeader); ip != "" {
 		return ip
@@ -73,10 +68,6 @@ func (c *countingBody) Read(bytes []byte) (int, error) {
 	return n, err
 }
 
-// statusRecorder wraps the real ResponseWriter to capture the final status and
-// response body size. Known limitation: it hides optional interfaces like
-// http.Flusher/http.Hijacker; acceptable here because http.TimeoutHandler in
-// the chain already buffers responses and blocks hijacking.
 type statusRecorder struct {
 	http.ResponseWriter
 	status      int
