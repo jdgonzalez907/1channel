@@ -2,11 +2,7 @@ package meta
 
 import (
 	"bytes"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,140 +10,128 @@ import (
 	"github.com/jdgonzalez907/1channel/internal/config"
 	"github.com/jdgonzalez907/1channel/internal/nats"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
-func sign(secret string, body []byte) string {
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(body)
-	return signaturePrefix + hex.EncodeToString(mac.Sum(nil))
-}
-
-func newPublishedStream(t *testing.T, publishErr error) (*nats.MessageEventReceivedStream, *nats.MockJetStream) {
+func newRegisteredStream(t *testing.T) (*nats.MessageEventReceivedStream, *nats.MockJetStream) {
 	t.Helper()
-
 	js := &nats.MockJetStream{}
 	js.On("CreateOrUpdateStream", mock.Anything).Return(&nats.MockStream{}, nil).Once()
-
 	stream, err := nats.NewMessageMessageEventReceivedStream(t.Context(), js)
-	if err != nil {
-		t.Fatalf("new stream: %v", err)
-	}
-	js.On("Publish", nats.MessageEventReceivedSubject, mock.Anything).
-		Return(&jetstream.PubAck{}, publishErr)
+	require.NoError(t, err)
 	return stream, js
 }
 
-func TestMessageEventHandlerPublishesSignedRequests(t *testing.T) {
+func TestMessageEventHandlerHandle(t *testing.T) {
 	const secret = "app-secret"
 
 	body := []byte(`{"object":"whatsapp_business_account","entry":[]}`)
+	bigBody := bytes.Repeat([]byte("a"), maxRequestBodyBytes+1)
 
 	tests := []struct {
-		name       string
-		publishErr error
-		wantStatus int
+		title     string
+		setup     func(t *testing.T, js *nats.MockJetStream)
+		body      []byte
+		signature string
+		expStatus int
+		expBody   string
+		expLog    string
 	}{
 		{
-			name:       "valid signature is published and accepted",
-			publishErr: nil,
-			wantStatus: http.StatusOK,
+			title: "success - valid signature is published to nats and accepted",
+			setup: func(t *testing.T, js *nats.MockJetStream) {
+				t.Helper()
+				js.On("Publish", nats.MessageEventReceivedSubject, body).
+					Return(&jetstream.PubAck{}, nil).Once()
+			},
+			body:      body,
+			signature: sign(secret, body),
+			expStatus: http.StatusOK,
+			expBody:   "",
+			expLog:    "message event received",
 		},
 		{
-			name:       "publish failure is internal server error",
-			publishErr: errors.New("nats down"),
-			wantStatus: http.StatusInternalServerError,
+			title:     "failure - missing signature header is bad request",
+			body:      body,
+			signature: "",
+			expStatus: http.StatusBadRequest,
+			expBody:   "Bad request\n",
+			expLog:    "",
+		},
+		{
+			title:     "failure - empty body is bad request",
+			body:      []byte{},
+			signature: sign(secret, []byte{}),
+			expStatus: http.StatusBadRequest,
+			expBody:   "Bad request\n",
+			expLog:    "",
+		},
+		{
+			title:     "failure - body over size limit is bad request",
+			body:      bigBody,
+			signature: sign(secret, bigBody),
+			expStatus: http.StatusBadRequest,
+			expBody:   "Bad request\n",
+			expLog:    "",
+		},
+		{
+			title:     "failure - tampered signature is unauthorized",
+			body:      body,
+			signature: sign("wrong-secret", body),
+			expStatus: http.StatusUnauthorized,
+			expBody:   "Unauthorized\n",
+			expLog:    "",
+		},
+		{
+			title: "failure - publish error logs and returns internal server error",
+			setup: func(t *testing.T, js *nats.MockJetStream) {
+				t.Helper()
+				js.On("Publish", nats.MessageEventReceivedSubject, body).
+					Return(&jetstream.PubAck{}, errors.New("nats down")).Once()
+			},
+			body:      body,
+			signature: sign(secret, body),
+			expStatus: http.StatusInternalServerError,
+			expBody:   "Internal server error\n",
+			expLog:    "publishing message event to nats",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var logs bytes.Buffer
-			previous := slog.Default()
-			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
-			defer slog.SetDefault(previous)
-
-			stream, js := newPublishedStream(t, tt.publishErr)
-			handler := NewMessageEventHandler(config.NewMockSecretsConfiguration(secret, ""), stream)
-
-			recorder := httptest.NewRecorder()
-			request := httptest.NewRequest(http.MethodPost, "/meta/webhook", bytes.NewReader(body))
-			request.Header.Set(signatureHeader, sign(secret, body))
-
-			handler.Handle(recorder, request)
-
-			if recorder.Code != tt.wantStatus {
-				t.Fatalf("expected status %d, got %d", tt.wantStatus, recorder.Code)
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			logs := captureSlogLogs(t)
+			stream, js := newRegisteredStream(t)
+			if tt.setup != nil {
+				tt.setup(t, js)
 			}
-
-			if tt.wantStatus == http.StatusOK {
-				js.AssertCalled(t, "Publish", nats.MessageEventReceivedSubject, body)
-			} else {
-				if !bytes.Contains(logs.Bytes(), []byte("publishing message event to nats")) {
-					t.Fatalf("expected publish error log, got %q", logs.String())
-				}
-			}
-		})
-	}
-}
-
-func TestMessageEventHandlerRejectsRequestsBeforePublishing(t *testing.T) {
-	const secret = "app-secret"
-
-	body := []byte(`{"object":"whatsapp_business_account","entry":[]}`)
-	handler := NewMessageEventHandler(config.NewMockSecretsConfiguration(secret, ""), nil)
-
-	tests := []struct {
-		name       string
-		header     func() (key string, value string, set bool)
-		body       []byte
-		wantStatus int
-	}{
-		{
-			name: "tampered signature is unauthorized",
-			header: func() (string, string, bool) {
-				return signatureHeader, sign("wrong-secret", body), true
-			},
-			body:       body,
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
-			name:       "missing signature header is bad request",
-			header:     func() (string, string, bool) { return "", "", false },
-			body:       body,
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "empty body is bad request",
-			header: func() (string, string, bool) {
-				return signatureHeader, sign(secret, []byte{}), true
-			},
-			body:       []byte{},
-			wantStatus: http.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var logs bytes.Buffer
-			previous := slog.Default()
-			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
-			defer slog.SetDefault(previous)
+			cfg := &config.MockConfiguration{}
+			cfg.On("MetaSecret").Return(secret)
+			handler := NewMessageEventHandler(cfg, stream)
 
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/meta/webhook", bytes.NewReader(tt.body))
-			if key, value, set := tt.header(); set {
-				request.Header.Set(key, value)
+			if tt.signature != "" {
+				request.Header.Set(signatureHeader, tt.signature)
 			}
 
+			// Act
 			handler.Handle(recorder, request)
 
-			if recorder.Code != tt.wantStatus {
-				t.Fatalf("expected status %d, got %d", tt.wantStatus, recorder.Code)
+			// Assert
+			assert.Equal(t, tt.expStatus, recorder.Code)
+			assert.Equal(t, tt.expBody, recorder.Body.String())
+			if tt.expLog != "" {
+				assert.Contains(t, logs.String(), tt.expLog)
+			} else {
+				assert.NotContains(t, logs.String(), "message event received")
 			}
-			if bytes.Contains(logs.Bytes(), []byte("message event received")) {
-				t.Fatalf("expected no event log for %d, got %q", tt.wantStatus, logs.String())
+			if tt.setup == nil {
+				js.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything)
 			}
+			js.AssertExpectations(t)
 		})
 	}
 }

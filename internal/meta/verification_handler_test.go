@@ -1,58 +1,106 @@
 package meta
 
 import (
-	"github.com/jdgonzalez907/1channel/internal/config"
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/jdgonzalez907/1channel/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestVerificationHandler(t *testing.T) {
-	cfg := config.NewMockSecretsConfiguration("", "verify-token")
-	handler := NewVerificationHandler(cfg)
+func captureSlogLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var logs bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return &logs
+}
 
+func TestVerificationHandlerHandle(t *testing.T) {
 	tests := []struct {
-		name       string
-		query      string
-		wantStatus int
-		wantBody   string
+		title     string
+		setup     func(t *testing.T, m *config.MockConfiguration)
+		query     string
+		expStatus int
+		expBody   string
 	}{
 		{
-			name:       "valid subscribe request echoes challenge",
-			query:      "?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=1158201444",
-			wantStatus: http.StatusOK,
-			wantBody:   "1158201444",
+			title: "success - valid subscribe request echoes challenge",
+			setup: func(t *testing.T, m *config.MockConfiguration) {
+				t.Helper()
+				m.On("OneChannelSecret").Return("verify-token").Once()
+			},
+			query:     "?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=1158201444",
+			expStatus: http.StatusOK,
+			expBody:   "1158201444",
 		},
 		{
-			name:       "wrong token is forbidden",
-			query:      "?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=123",
-			wantStatus: http.StatusForbidden,
+			title: "failure - wrong token is forbidden",
+			setup: func(t *testing.T, m *config.MockConfiguration) {
+				t.Helper()
+				m.On("OneChannelSecret").Return("verify-token").Once()
+			},
+			query:     "?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=123",
+			expStatus: http.StatusForbidden,
+			expBody:   "Forbidden\n",
 		},
 		{
-			name:       "wrong mode is forbidden",
-			query:      "?hub.mode=unsubscribe&hub.verify_token=verify-token&hub.challenge=123",
-			wantStatus: http.StatusForbidden,
+			title: "failure - wrong mode is forbidden",
+			setup: func(t *testing.T, m *config.MockConfiguration) {
+				t.Helper()
+				m.On("OneChannelSecret").Return("verify-token").Once()
+			},
+			query:     "?hub.mode=unsubscribe&hub.verify_token=verify-token&hub.challenge=123",
+			expStatus: http.StatusForbidden,
+			expBody:   "Forbidden\n",
 		},
 		{
-			name:       "empty query is forbidden",
-			query:      "",
-			wantStatus: http.StatusForbidden,
+			title: "failure - empty query is forbidden",
+			setup: func(t *testing.T, m *config.MockConfiguration) {
+				t.Helper()
+				m.On("OneChannelSecret").Return("verify-token").Once()
+			},
+			query:     "",
+			expStatus: http.StatusForbidden,
+			expBody:   "Forbidden\n",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			m := &config.MockConfiguration{}
+			tt.setup(t, m)
+			handler := NewVerificationHandler(m)
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodGet, "/meta/webhook"+tt.query, nil)
 
+			// Act
 			handler.Handle(recorder, request)
 
-			if recorder.Code != tt.wantStatus {
-				t.Fatalf("expected status %d, got %d", tt.wantStatus, recorder.Code)
+			// Assert
+			assert.Equal(t, tt.expStatus, recorder.Code)
+			assert.Equal(t, tt.expBody, recorder.Body.String())
+			if ct := recorder.Header().Get("Content-Type"); tt.expStatus == http.StatusOK {
+				assert.Equal(t, "text/plain", ct)
 			}
-			if tt.wantStatus == http.StatusOK && recorder.Body.String() != tt.wantBody {
-				t.Fatalf("expected challenge %q, got %q", tt.wantBody, recorder.Body.String())
-			}
+			m.AssertExpectations(t)
 		})
 	}
+}
+
+func TestNewVerificationHandler(t *testing.T) {
+	// Arrange
+	m := &config.MockConfiguration{}
+
+	// Act
+	handler := NewVerificationHandler(m)
+
+	// Assert
+	require.NotNil(t, handler)
 }

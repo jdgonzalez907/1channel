@@ -2,76 +2,71 @@ package meta
 
 import (
 	"bytes"
-	"github.com/jdgonzalez907/1channel/internal/config"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jdgonzalez907/1channel/internal/config"
 	httprouter "github.com/jdgonzalez907/1channel/internal/http"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRegisterRoutes(t *testing.T) {
 	const secret = "app-secret"
-
-	newRouter := func() *httprouter.Router {
-		router := httprouter.NewRouter()
-		RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, "verify-token"), nil)
-		return router
-	}
+	const verifyToken = "verify-token"
 
 	validBody := []byte(`{"object":"whatsapp_business_account"}`)
 
 	tests := []struct {
-		name       string
-		method     string
-		target     string
-		header     func() (string, string)
-		wantStatus int
-		wantBody   string
+		title     string
+		method    string
+		target    string
+		expStatus int
+		expBody   string
 	}{
 		{
-			name:       "GET webhook with valid token echoes challenge",
-			method:     http.MethodGet,
-			target:     "/meta/webhook?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=c1",
-			wantStatus: http.StatusOK,
-			wantBody:   "c1",
+			title:     "success - get webhook with valid token echoes challenge",
+			method:    http.MethodGet,
+			target:    "/meta/webhook?hub.mode=subscribe&hub.verify_token=verify-token&hub.challenge=c1",
+			expStatus: http.StatusOK,
+			expBody:   "c1",
 		},
 		{
-			name:       "POST webhook without signature rejected",
-			method:     http.MethodPost,
-			target:     "/meta/webhook",
-			wantStatus: http.StatusBadRequest,
+			title:     "failure - post webhook without signature is rejected",
+			method:    http.MethodPost,
+			target:    "/meta/webhook",
+			expStatus: http.StatusBadRequest,
+			expBody:   "Bad request\n",
 		},
 		{
-			name:       "unknown path is 404",
-			method:     http.MethodGet,
-			target:     "/meta/hash",
-			wantStatus: http.StatusNotFound,
+			title:     "failure - unknown path is 404",
+			method:    http.MethodGet,
+			target:    "/meta/hash",
+			expStatus: http.StatusNotFound,
 		},
 		{
-			name:       "wrong method on webhook path is 405",
-			method:     http.MethodDelete,
-			target:     "/meta/webhook",
-			wantStatus: http.StatusMethodNotAllowed,
+			title:     "failure - wrong method on webhook path is 405",
+			method:    http.MethodDelete,
+			target:    "/meta/webhook",
+			expStatus: http.StatusMethodNotAllowed,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			router := httprouter.NewRouter()
+			RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, verifyToken), nil)
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(tt.method, tt.target, bytes.NewReader(validBody))
-			if tt.header != nil {
-				key, value := tt.header()
-				request.Header.Set(key, value)
-			}
 
-			newRouter().ServeHTTP(recorder, request)
+			// Act
+			router.ServeHTTP(recorder, request)
 
-			if recorder.Code != tt.wantStatus {
-				t.Fatalf("expected %d, got %d", tt.wantStatus, recorder.Code)
-			}
-			if tt.wantBody != "" && recorder.Body.String() != tt.wantBody {
-				t.Fatalf("expected body %q, got %q", tt.wantBody, recorder.Body.String())
+			// Assert
+			assert.Equal(t, tt.expStatus, recorder.Code)
+			if tt.expBody != "" {
+				assert.Equal(t, tt.expBody, recorder.Body.String())
 			}
 		})
 	}

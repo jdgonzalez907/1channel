@@ -5,49 +5,55 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTimeout(t *testing.T) {
 	tests := []struct {
-		name     string
-		timeout  time.Duration
-		handler  http.Handler
-		wantCode int
-		wantBody string
+		title     string
+		timeout   time.Duration
+		slow      bool
+		expStatus int
+		expBody   string
 	}{
 		{
-			name:    "slow handler gets 503 timeout",
-			timeout: 20 * time.Millisecond,
-			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				time.Sleep(200 * time.Millisecond)
-				w.WriteHeader(http.StatusOK)
-			}),
-			wantCode: http.StatusServiceUnavailable,
-			wantBody: timeoutResponseMessage,
+			title:     "success - fast handler answers normally",
+			timeout:   time.Second,
+			slow:      false,
+			expStatus: http.StatusOK,
+			expBody:   "ok",
 		},
 		{
-			name:    "fast handler answers normally",
-			timeout: time.Second,
-			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("ok"))
-			}),
-			wantCode: http.StatusOK,
-			wantBody: "ok",
+			title:     "failure - blocked handler gets 503 timeout",
+			timeout:   20 * time.Millisecond,
+			slow:      true,
+			expStatus: http.StatusServiceUnavailable,
+			expBody:   timeoutResponseMessage,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			release := make(chan struct{})
+			t.Cleanup(func() { close(release) })
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.slow {
+					<-release
+					return
+				}
+				w.Write([]byte("ok"))
+			})
 			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodGet, "/", nil)
 
-			Timeout(tt.timeout)(tt.handler).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/", nil))
+			// Act
+			Timeout(tt.timeout)(handler).ServeHTTP(recorder, request)
 
-			if recorder.Code != tt.wantCode {
-				t.Fatalf("expected %d, got %d", tt.wantCode, recorder.Code)
-			}
-			if recorder.Body.String() != tt.wantBody {
-				t.Fatalf("expected body %q, got %q", tt.wantBody, recorder.Body.String())
-			}
+			// Assert
+			assert.Equal(t, tt.expStatus, recorder.Code)
+			assert.Equal(t, tt.expBody, recorder.Body.String())
 		})
 	}
 }

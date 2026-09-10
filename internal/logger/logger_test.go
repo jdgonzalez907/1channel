@@ -6,49 +6,77 @@ import (
 	"testing"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
+	"github.com/stretchr/testify/assert"
 )
 
-type fakeConfig struct {
-	config.Configuration
-
-	logLevel string
-}
-
-func (f fakeConfig) LogLevel() string { return f.logLevel }
-
-func TestParseLevel(t *testing.T) {
+func TestNew(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  slog.Level
+		title           string
+		setup           func(t *testing.T, m *config.MockConfiguration)
+		expInfoEnabled  bool
+		expErrorEnabled bool
 	}{
-		{"debug stays debug", "debug", slog.LevelDebug},
-		{"uppercase parses case-insensitively", "INFO", slog.LevelInfo},
-		{"warn maps to warn", "warn", slog.LevelWarn},
-		{"error maps to error", "error", slog.LevelError},
-		{"garbage falls back to info", "verbose", slog.LevelInfo},
-		{"empty falls back to info", "", slog.LevelInfo},
+		{
+			title: "success - warn level disables info and keeps error",
+			setup: func(t *testing.T, m *config.MockConfiguration) {
+				t.Helper()
+				m.On("LogLevel").Return("warn").Once()
+			},
+			expInfoEnabled:  false,
+			expErrorEnabled: true,
+		},
+		{
+			title: "success - debug level enables info",
+			setup: func(t *testing.T, m *config.MockConfiguration) {
+				t.Helper()
+				m.On("LogLevel").Return("debug").Once()
+			},
+			expInfoEnabled:  true,
+			expErrorEnabled: true,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := parseLevel(tt.input); got != tt.want {
-				t.Fatalf("parseLevel(%q) = %v, want %v", tt.input, got, tt.want)
-			}
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			m := &config.MockConfiguration{}
+			tt.setup(t, m)
+
+			// Act
+			logger := New(m)
+
+			// Assert
+			ctx := context.Background()
+			assert.Equal(t, tt.expInfoEnabled, logger.Enabled(ctx, slog.LevelInfo))
+			assert.Equal(t, tt.expErrorEnabled, logger.Enabled(ctx, slog.LevelError))
+			m.AssertExpectations(t)
 		})
 	}
 }
 
-func TestNewBuildsLoggerHonouringConfiguredLevel(t *testing.T) {
-	cfg := fakeConfig{logLevel: "warn"}
-
-	logger := New(cfg)
-
-	ctx := context.Background()
-	if logger.Enabled(ctx, slog.LevelInfo) {
-		t.Fatal("expected logger built with LOG_LEVEL=warn to disable info")
+func TestParseLevel(t *testing.T) {
+	tests := []struct {
+		title    string
+		input    string
+		expected slog.Level
+	}{
+		{title: "success - parses debug", input: "debug", expected: slog.LevelDebug},
+		{title: "success - parses uppercase info case-insensitively", input: "INFO", expected: slog.LevelInfo},
+		{title: "success - parses warn", input: "warn", expected: slog.LevelWarn},
+		{title: "success - parses error", input: "error", expected: slog.LevelError},
+		{title: "failure - unknown level falls back to info", input: "verbose", expected: slog.LevelInfo},
+		{title: "failure - empty level falls back to info", input: "", expected: slog.LevelInfo},
 	}
-	if !logger.Enabled(ctx, slog.LevelError) {
-		t.Fatal("expected logger built with LOG_LEVEL=warn to keep error enabled")
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+
+			// Act
+			got := parseLevel(tt.input)
+
+			// Assert
+			assert.Equal(t, tt.expected, got)
+		})
 	}
 }

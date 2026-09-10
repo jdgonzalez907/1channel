@@ -1,77 +1,111 @@
 package nats
 
 import (
-	"context"
 	"errors"
 	"testing"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
-func TestNewMessageMessageEventReceivedStreamEnsuresConfiguredStream(t *testing.T) {
-	js := &MockJetStream{}
-	js.On("CreateOrUpdateStream", mock.Anything).
-		Return(&MockStream{}, nil).
-		Once()
-
-	if _, err := NewMessageMessageEventReceivedStream(context.Background(), js); err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-
-	js.AssertCalled(t, "CreateOrUpdateStream", jetstream.StreamConfig{
-		Name:     "META_EVENT_RECEIVED",
-		Subjects: []string{"meta.event_received"},
-	})
-}
-
-func TestNewMessageMessageEventReceivedStreamWrapsEnsureError(t *testing.T) {
-	js := &MockJetStream{}
-	boom := errors.New("boom")
-	js.On("CreateOrUpdateStream", mock.Anything).
-		Return(&MockStream{}, boom).
-		Once()
-
-	if _, err := NewMessageMessageEventReceivedStream(context.Background(), js); !errors.Is(err, boom) {
-		t.Fatalf("expected wrapped boom, got %v", err)
-	}
-}
-
-func TestMessageEventReceivedStreamPublish(t *testing.T) {
+func TestNewMessageMessageEventReceivedStream(t *testing.T) {
 	tests := []struct {
-		name    string
-		ack     *jetstream.PubAck
-		err     error
-		wantErr bool
+		title         string
+		setup         func(t *testing.T, m *MockJetStream)
+		expectedError string
 	}{
 		{
-			name:    "publishes to meta subject and succeeds",
-			ack:     &jetstream.PubAck{Stream: "META_EVENT_RECEIVED"},
-			wantErr: false,
+			title: "success - ensures stream with configured name and subject",
+			setup: func(t *testing.T, m *MockJetStream) {
+				t.Helper()
+				m.On("CreateOrUpdateStream", jetstream.StreamConfig{
+					Name:     messageEventReceivedStreamName,
+					Subjects: []string{MessageEventReceivedSubject},
+				}).Return(&MockStream{}, nil).Once()
+			},
+			expectedError: "",
 		},
 		{
-			name:    "wraps publish failure",
-			ack:     &jetstream.PubAck{},
-			err:     errors.New("no responders"),
-			wantErr: true,
+			title: "failure - wraps ensure stream error",
+			setup: func(t *testing.T, m *MockJetStream) {
+				t.Helper()
+				m.On("CreateOrUpdateStream", mock.Anything).
+					Return(&MockStream{}, errors.New("boom")).Once()
+			},
+			expectedError: "ensuring stream META_EVENT_RECEIVED: boom",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
 			js := &MockJetStream{}
-			js.On("Publish", "meta.event_received", []byte("payload")).
-				Return(tt.ack, tt.err).
-				Once()
+			tt.setup(t, js)
 
-			stream := &MessageEventReceivedStream{js: js}
-			err := stream.Publish(context.Background(), []byte("payload"))
+			// Act
+			stream, err := NewMessageMessageEventReceivedStream(t.Context(), js)
 
-			if tt.wantErr && err == nil {
-				t.Fatal("expected error, got nil")
+			// Assert
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				assert.Equal(t, tt.expectedError, err.Error())
+				assert.Nil(t, stream)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, stream)
 			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("expected no error, got %v", err)
+			js.AssertExpectations(t)
+		})
+	}
+}
+
+func TestPublish(t *testing.T) {
+	tests := []struct {
+		title         string
+		setup         func(t *testing.T, m *MockJetStream)
+		data          []byte
+		expectedError string
+	}{
+		{
+			title: "success - publishes payload to event subject",
+			setup: func(t *testing.T, m *MockJetStream) {
+				t.Helper()
+				m.On("Publish", MessageEventReceivedSubject, []byte("payload")).
+					Return(&jetstream.PubAck{Stream: messageEventReceivedStreamName}, nil).Once()
+			},
+			data:          []byte("payload"),
+			expectedError: "",
+		},
+		{
+			title: "failure - wraps publish error",
+			setup: func(t *testing.T, m *MockJetStream) {
+				t.Helper()
+				m.On("Publish", MessageEventReceivedSubject, []byte("payload")).
+					Return((*jetstream.PubAck)(nil), errors.New("no responders")).Once()
+			},
+			data:          []byte("payload"),
+			expectedError: "publishing to stream META_EVENT_RECEIVED: no responders",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			js := &MockJetStream{}
+			tt.setup(t, js)
+			stream := &MessageEventReceivedStream{js: js}
+
+			// Act
+			err := stream.Publish(t.Context(), tt.data)
+
+			// Assert
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				assert.Equal(t, tt.expectedError, err.Error())
+			} else {
+				require.NoError(t, err)
 			}
 			js.AssertExpectations(t)
 		})

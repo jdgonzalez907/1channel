@@ -3,6 +3,9 @@ package config
 import (
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setRequiredEnv(t *testing.T) {
@@ -20,90 +23,42 @@ func setRequiredEnv(t *testing.T) {
 
 func TestNewConfiguration(t *testing.T) {
 	tests := []struct {
-		name    string
-		setup   func(t *testing.T)
-		wantErr bool
-		verify  func(t *testing.T, cfg Configuration)
+		title         string
+		setup         func(t *testing.T)
+		expected      func(t *testing.T, cfg Configuration)
+		expectedError string
 	}{
 		{
-			name:    "only required vars yields documented defaults",
-			setup:   func(t *testing.T) {},
-			wantErr: false,
-			verify: func(t *testing.T, cfg Configuration) {
+			title: "success - required vars with documented defaults",
+			expected: func(t *testing.T, cfg Configuration) {
 				t.Helper()
-				if cfg.AppName() != "1channel" {
-					t.Fatalf("expected AppName 1channel, got %q", cfg.AppName())
-				}
-				if cfg.HTTPPort() != "8080" {
-					t.Fatalf("expected HTTPPort default 8080, got %q", cfg.HTTPPort())
-				}
-				if cfg.LogLevel() != "info" {
-					t.Fatalf("expected LogLevel default info, got %q", cfg.LogLevel())
-				}
-				if cfg.OneChannelSecret() != "oc-secret" {
-					t.Fatalf("expected OneChannelSecret oc-secret, got %q", cfg.OneChannelSecret())
-				}
-				if cfg.MetaSecret() != "meta-secret" {
-					t.Fatalf("expected MetaSecret meta-secret, got %q", cfg.MetaSecret())
-				}
-				if cfg.PostgresHost() != "localhost" {
-					t.Fatalf("expected PostgresHost localhost, got %q", cfg.PostgresHost())
-				}
-				if cfg.PostgresDatabase() != "1channel_dev" {
-					t.Fatalf("expected PostgresDatabase 1channel_dev, got %q", cfg.PostgresDatabase())
-				}
-				if cfg.PostgresUsername() != "dev" {
-					t.Fatalf("expected PostgresUsername dev, got %q", cfg.PostgresUsername())
-				}
-				if cfg.PostgresPassword() != "dev" {
-					t.Fatalf("expected PostgresPassword dev, got %q", cfg.PostgresPassword())
-				}
-				if cfg.PostgresPort() != 5432 {
-					t.Fatalf("expected PostgresPort default 5432, got %d", cfg.PostgresPort())
-				}
-				if cfg.PostgresMaxConns() != 4 {
-					t.Fatalf("expected PostgresMaxConns default 4, got %d", cfg.PostgresMaxConns())
-				}
-				if cfg.PostgresMinConns() != 0 {
-					t.Fatalf("expected PostgresMinConns default 0, got %d", cfg.PostgresMinConns())
-				}
-				if cfg.PostgresMaxConnLifeTime() != time.Hour {
-					t.Fatalf("expected PostgresMaxConnLifeTime default 1h, got %v", cfg.PostgresMaxConnLifeTime())
-				}
-				if cfg.PostgresMaxConnIdleTime() != 30*time.Minute {
-					t.Fatalf("expected PostgresMaxConnIdleTime default 30m, got %v", cfg.PostgresMaxConnIdleTime())
-				}
-				if cfg.NatsHost() != "localhost" {
-					t.Fatalf("expected NatsHost localhost, got %q", cfg.NatsHost())
-				}
-				if cfg.NatsPort() != 4222 {
-					t.Fatalf("expected NatsPort default 4222, got %d", cfg.NatsPort())
-				}
-				if cfg.NatsUsername() != "dev" {
-					t.Fatalf("expected NatsUsername dev, got %q", cfg.NatsUsername())
-				}
-				if cfg.NatsPassword() != "dev" {
-					t.Fatalf("expected NatsPassword dev, got %q", cfg.NatsPassword())
-				}
-				if cfg.NatsTimeout() != 2*time.Second {
-					t.Fatalf("expected NatsTimeout default 2s, got %v", cfg.NatsTimeout())
-				}
-				if cfg.NatsMaxReconnects() != -1 {
-					t.Fatalf("expected NatsMaxReconnects default -1, got %d", cfg.NatsMaxReconnects())
-				}
-				if cfg.NatsReconnectWait() != 2*time.Second {
-					t.Fatalf("expected NatsReconnectWait default 2s, got %v", cfg.NatsReconnectWait())
-				}
-				if cfg.NatsPingInterval() != 2*time.Minute {
-					t.Fatalf("expected NatsPingInterval default 2m, got %v", cfg.NatsPingInterval())
-				}
-				if cfg.NatsMaxPingsOut() != 2 {
-					t.Fatalf("expected NatsMaxPingsOut default 2, got %d", cfg.NatsMaxPingsOut())
-				}
+				assert.Equal(t, "1channel", cfg.AppName())
+				assert.Equal(t, "8080", cfg.HTTPPort())
+				assert.Equal(t, "info", cfg.LogLevel())
+				assert.Equal(t, "oc-secret", cfg.OneChannelSecret())
+				assert.Equal(t, "meta-secret", cfg.MetaSecret())
+				assert.Equal(t, "localhost", cfg.PostgresHost())
+				assert.Equal(t, uint16(5432), cfg.PostgresPort())
+				assert.Equal(t, "1channel_dev", cfg.PostgresDatabase())
+				assert.Equal(t, "dev", cfg.PostgresUsername())
+				assert.Equal(t, "dev", cfg.PostgresPassword())
+				assert.Equal(t, int32(4), cfg.PostgresMaxConns())
+				assert.Equal(t, int32(0), cfg.PostgresMinConns())
+				assert.Equal(t, time.Hour, cfg.PostgresMaxConnLifeTime())
+				assert.Equal(t, 30*time.Minute, cfg.PostgresMaxConnIdleTime())
+				assert.Equal(t, "localhost", cfg.NatsHost())
+				assert.Equal(t, 4222, cfg.NatsPort())
+				assert.Equal(t, "dev", cfg.NatsUsername())
+				assert.Equal(t, "dev", cfg.NatsPassword())
+				assert.Equal(t, 2*time.Second, cfg.NatsTimeout())
+				assert.Equal(t, -1, cfg.NatsMaxReconnects())
+				assert.Equal(t, 2*time.Second, cfg.NatsReconnectWait())
+				assert.Equal(t, 2*time.Minute, cfg.NatsPingInterval())
+				assert.Equal(t, 2, cfg.NatsMaxPingsOut())
 			},
 		},
 		{
-			name: "explicit vars override defaults",
+			title: "success - explicit vars override defaults",
 			setup: func(t *testing.T) {
 				t.Setenv("HTTP_PORT", "9090")
 				t.Setenv("LOG_LEVEL", "debug")
@@ -111,93 +66,99 @@ func TestNewConfiguration(t *testing.T) {
 				t.Setenv("POSTGRES_MAX_CONN_LIFETIME", "30m")
 				t.Setenv("NATS_PORT", "14222")
 			},
-			wantErr: false,
-			verify: func(t *testing.T, cfg Configuration) {
+			expected: func(t *testing.T, cfg Configuration) {
 				t.Helper()
-				if cfg.HTTPPort() != "9090" {
-					t.Fatalf("expected HTTPPort 9090, got %q", cfg.HTTPPort())
-				}
-				if cfg.LogLevel() != "debug" {
-					t.Fatalf("expected LogLevel debug, got %q", cfg.LogLevel())
-				}
-				if cfg.PostgresPort() != 6543 {
-					t.Fatalf("expected PostgresPort 6543, got %d", cfg.PostgresPort())
-				}
-				if cfg.PostgresMaxConnLifeTime() != 30*time.Minute {
-					t.Fatalf("expected PostgresMaxConnLifeTime 30m, got %v", cfg.PostgresMaxConnLifeTime())
-				}
-				if cfg.NatsPort() != 14222 {
-					t.Fatalf("expected NatsPort 14222, got %d", cfg.NatsPort())
-				}
+				assert.Equal(t, "9090", cfg.HTTPPort())
+				assert.Equal(t, "debug", cfg.LogLevel())
+				assert.Equal(t, uint16(6543), cfg.PostgresPort())
+				assert.Equal(t, 30*time.Minute, cfg.PostgresMaxConnLifeTime())
+				assert.Equal(t, 14222, cfg.NatsPort())
 			},
 		},
 		{
-			name: "secrets are exposed verbatim",
+			title: "success - secrets are exposed verbatim",
 			setup: func(t *testing.T) {
 				t.Setenv("ONECHANNEL_SECRET", "super-secret-1")
 				t.Setenv("META_SECRET", "super-secret-2")
 			},
-			wantErr: false,
-			verify: func(t *testing.T, cfg Configuration) {
+			expected: func(t *testing.T, cfg Configuration) {
 				t.Helper()
-				if cfg.OneChannelSecret() != "super-secret-1" {
-					t.Fatalf("expected OneChannelSecret override, got %q", cfg.OneChannelSecret())
-				}
-				if cfg.MetaSecret() != "super-secret-2" {
-					t.Fatalf("expected MetaSecret override, got %q", cfg.MetaSecret())
-				}
+				assert.Equal(t, "super-secret-1", cfg.OneChannelSecret())
+				assert.Equal(t, "super-secret-2", cfg.MetaSecret())
 			},
 		},
 		{
-			name: "numeric field with garbage value fails parse",
-			setup: func(t *testing.T) {
-				t.Setenv("POSTGRES_PORT", "not-a-number")
-			},
-			wantErr: true,
+			title:         "failure - rejects garbage value in numeric postgres port",
+			setup:         func(t *testing.T) { t.Setenv("POSTGRES_PORT", "not-a-number") },
+			expectedError: `env: parse error on field "PostgresPortEnv" of type "uint16": strconv.ParseUint: parsing "not-a-number": invalid syntax`,
+		},
+		{
+			title:         "failure - rejects empty onechannel secret",
+			setup:         func(t *testing.T) { t.Setenv("ONECHANNEL_SECRET", "") },
+			expectedError: `env: environment variable "ONECHANNEL_SECRET" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty meta secret",
+			setup:         func(t *testing.T) { t.Setenv("META_SECRET", "") },
+			expectedError: `env: environment variable "META_SECRET" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty postgres host",
+			setup:         func(t *testing.T) { t.Setenv("POSTGRES_HOST", "") },
+			expectedError: `env: environment variable "POSTGRES_HOST" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty postgres database",
+			setup:         func(t *testing.T) { t.Setenv("POSTGRES_DATABASE", "") },
+			expectedError: `env: environment variable "POSTGRES_DATABASE" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty postgres username",
+			setup:         func(t *testing.T) { t.Setenv("POSTGRES_USERNAME", "") },
+			expectedError: `env: environment variable "POSTGRES_USERNAME" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty postgres password",
+			setup:         func(t *testing.T) { t.Setenv("POSTGRES_PASSWORD", "") },
+			expectedError: `env: environment variable "POSTGRES_PASSWORD" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty nats host",
+			setup:         func(t *testing.T) { t.Setenv("NATS_HOST", "") },
+			expectedError: `env: environment variable "NATS_HOST" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty nats username",
+			setup:         func(t *testing.T) { t.Setenv("NATS_USERNAME", "") },
+			expectedError: `env: environment variable "NATS_USERNAME" should not be empty`,
+		},
+		{
+			title:         "failure - rejects empty nats password",
+			setup:         func(t *testing.T) { t.Setenv("NATS_PASSWORD", "") },
+			expectedError: `env: environment variable "NATS_PASSWORD" should not be empty`,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
 			setRequiredEnv(t)
-			tt.setup(t)
+			if tt.setup != nil {
+				tt.setup(t)
+			}
 
+			// Act
 			cfg, err := NewConfiguration()
 
-			if tt.wantErr && err == nil {
-				t.Fatal("expected error, got nil")
+			// Assert
+			if tt.expectedError != "" {
+				require.Error(t, err)
+				assert.Equal(t, tt.expectedError, err.Error())
+				return
 			}
-			if !tt.wantErr && err != nil {
-				t.Fatalf("expected no error, got %v", err)
-			}
-			if tt.verify != nil {
-				tt.verify(t, cfg)
-			}
-		})
-	}
-}
-
-func TestNewConfigurationRequiredVars(t *testing.T) {
-	requiredEnvVars := []string{
-		"ONECHANNEL_SECRET",
-		"META_SECRET",
-		"POSTGRES_HOST",
-		"POSTGRES_DATABASE",
-		"POSTGRES_USERNAME",
-		"POSTGRES_PASSWORD",
-		"NATS_HOST",
-		"NATS_USERNAME",
-		"NATS_PASSWORD",
-	}
-
-	for _, envVar := range requiredEnvVars {
-		t.Run(envVar+" missing rejects configuration", func(t *testing.T) {
-			setRequiredEnv(t)
-			t.Setenv(envVar, "")
-
-			if _, err := NewConfiguration(); err == nil {
-				t.Fatalf("expected error when %s is empty", envVar)
-			}
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			tt.expected(t, cfg)
 		})
 	}
 }
