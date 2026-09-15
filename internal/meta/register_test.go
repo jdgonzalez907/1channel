@@ -56,7 +56,7 @@ func TestRegisterRoutes(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			// Arrange
 			router := httprouter.NewRouter()
-			RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, verifyToken), nil)
+			RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, verifyToken))
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(tt.method, tt.target, bytes.NewReader(validBody))
 

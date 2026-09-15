@@ -2,27 +2,13 @@ package meta
 
 import (
 	"bytes"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
-	"github.com/jdgonzalez907/1channel/internal/nats"
-	"github.com/nats-io/nats.go/jetstream"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
-
-func newRegisteredStream(t *testing.T) (*nats.MessageEventReceivedStream, *nats.MockJetStream) {
-	t.Helper()
-	js := &nats.MockJetStream{}
-	js.On("CreateOrUpdateStream", mock.Anything).Return(&nats.MockStream{}, nil).Once()
-	stream, err := nats.NewMessageMessageEventReceivedStream(t.Context(), js)
-	require.NoError(t, err)
-	return stream, js
-}
 
 func TestMessageEventHandlerHandle(t *testing.T) {
 	const secret = "app-secret"
@@ -32,7 +18,6 @@ func TestMessageEventHandlerHandle(t *testing.T) {
 
 	tests := []struct {
 		title     string
-		setup     func(t *testing.T, js *nats.MockJetStream)
 		body      []byte
 		signature string
 		expStatus int
@@ -40,12 +25,7 @@ func TestMessageEventHandlerHandle(t *testing.T) {
 		expLog    string
 	}{
 		{
-			title: "success - valid signature is published to nats and accepted",
-			setup: func(t *testing.T, js *nats.MockJetStream) {
-				t.Helper()
-				js.On("Publish", nats.MessageEventReceivedSubject, body).
-					Return(&jetstream.PubAck{}, nil).Once()
-			},
+			title:     "success - valid signature is accepted",
 			body:      body,
 			signature: sign(secret, body),
 			expStatus: http.StatusOK,
@@ -84,32 +64,15 @@ func TestMessageEventHandlerHandle(t *testing.T) {
 			expBody:   "Unauthorized\n",
 			expLog:    "",
 		},
-		{
-			title: "failure - publish error logs and returns internal server error",
-			setup: func(t *testing.T, js *nats.MockJetStream) {
-				t.Helper()
-				js.On("Publish", nats.MessageEventReceivedSubject, body).
-					Return(&jetstream.PubAck{}, errors.New("nats down")).Once()
-			},
-			body:      body,
-			signature: sign(secret, body),
-			expStatus: http.StatusInternalServerError,
-			expBody:   "Internal server error\n",
-			expLog:    "publishing message event to nats",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.title, func(t *testing.T) {
 			// Arrange
 			logs := captureSlogLogs(t)
-			stream, js := newRegisteredStream(t)
-			if tt.setup != nil {
-				tt.setup(t, js)
-			}
 			cfg := &config.MockConfiguration{}
 			cfg.On("MetaSecret").Return(secret)
-			handler := NewMessageEventHandler(cfg, stream)
+			handler := NewMessageEventHandler(cfg)
 
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(http.MethodPost, "/meta/webhook", bytes.NewReader(tt.body))
@@ -128,10 +91,6 @@ func TestMessageEventHandlerHandle(t *testing.T) {
 			} else {
 				assert.NotContains(t, logs.String(), "message event received")
 			}
-			if tt.setup == nil {
-				js.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything)
-			}
-			js.AssertExpectations(t)
 		})
 	}
 }

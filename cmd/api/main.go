@@ -16,7 +16,6 @@ import (
 
 	"github.com/jdgonzalez907/1channel/internal/config"
 	"github.com/jdgonzalez907/1channel/internal/meta"
-	"github.com/jdgonzalez907/1channel/internal/nats"
 )
 
 const (
@@ -36,29 +35,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	natsClient, err := nats.New(cfg, slog.Default())
-	if err != nil {
-		slog.Error("failed to connect to nats", "error", err)
-		os.Exit(1)
-	}
-	defer func() {
-		if err := natsClient.Drain(); err != nil {
-			slog.Warn("draining nats connection", "error", err)
-		}
-	}()
-
-	if err := natsClient.Register(ctx); err != nil {
-		slog.Error("failed to register nats streams and consumers", "error", err)
-		os.Exit(1)
-	}
-
 	router := httprouter.NewRouter()
 	router.Use(
 		middleware.Recovery(),
 		middleware.Logging(),
 		middleware.Timeout(requestTimeout),
 	)
-	meta.RegisterRoutes(router, cfg, natsClient.Streams.MessageEventReceived)
+	meta.RegisterRoutes(router, cfg)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTPPort(),

@@ -4,10 +4,9 @@ import (
 	httprouter "github.com/jdgonzalez907/1channel/internal/http"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
-	"github.com/jdgonzalez907/1channel/internal/nats"
 )
 
-func RegisterRoutes(r *httprouter.Router, cfg config.Configuration, stream *nats.MessageEventReceivedStream) {
+func RegisterRoutes(r *httprouter.Router, cfg config.Configuration) {
 	r.Handle("GET /meta/webhook", NewVerificationHandler(cfg).Handle)
-	r.Handle("POST /meta/webhook", NewMessageEventHandler(cfg, stream).Handle)
+	r.Handle("POST /meta/webhook", NewMessageEventHandler(cfg).Handle)
 }

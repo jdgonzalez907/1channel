@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
-	"github.com/jdgonzalez907/1channel/internal/nats"
 )
 
 const (
@@ -15,12 +14,11 @@ const (
 )
 
 type MessageEventHandler struct {
-	cfg    config.Configuration
-	stream *nats.MessageEventReceivedStream
+	cfg config.Configuration
 }
 
-func NewMessageEventHandler(cfg config.Configuration, stream *nats.MessageEventReceivedStream) *MessageEventHandler {
-	return &MessageEventHandler{cfg: cfg, stream: stream}
+func NewMessageEventHandler(cfg config.Configuration) *MessageEventHandler {
+	return &MessageEventHandler{cfg: cfg}
 }
 
 func (h *MessageEventHandler) Handle(w http.ResponseWriter, r *http.Request) {
@@ -44,15 +42,6 @@ func (h *MessageEventHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.stream.Publish(r.Context(), bodyBytes); err != nil {
-		slog.Error("publishing message event to nats",
-			"subject", nats.MessageEventReceivedSubject,
-			"error", err,
-		)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	slog.Info("message event received", "subject", nats.MessageEventReceivedSubject)
+	slog.Info("message event received")
 	w.WriteHeader(http.StatusOK)
 }

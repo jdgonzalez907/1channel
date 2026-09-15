@@ -16,9 +16,6 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("POSTGRES_DATABASE", "1channel_dev")
 	t.Setenv("POSTGRES_USERNAME", "dev")
 	t.Setenv("POSTGRES_PASSWORD", "dev")
-	t.Setenv("NATS_HOST", "localhost")
-	t.Setenv("NATS_USERNAME", "dev")
-	t.Setenv("NATS_PASSWORD", "dev")
 }
 
 func TestNewConfiguration(t *testing.T) {
@@ -46,15 +43,6 @@ func TestNewConfiguration(t *testing.T) {
 				assert.Equal(t, int32(0), cfg.PostgresMinConns())
 				assert.Equal(t, time.Hour, cfg.PostgresMaxConnLifeTime())
 				assert.Equal(t, 30*time.Minute, cfg.PostgresMaxConnIdleTime())
-				assert.Equal(t, "localhost", cfg.NatsHost())
-				assert.Equal(t, 4222, cfg.NatsPort())
-				assert.Equal(t, "dev", cfg.NatsUsername())
-				assert.Equal(t, "dev", cfg.NatsPassword())
-				assert.Equal(t, 2*time.Second, cfg.NatsTimeout())
-				assert.Equal(t, -1, cfg.NatsMaxReconnects())
-				assert.Equal(t, 2*time.Second, cfg.NatsReconnectWait())
-				assert.Equal(t, 2*time.Minute, cfg.NatsPingInterval())
-				assert.Equal(t, 2, cfg.NatsMaxPingsOut())
 			},
 		},
 		{
@@ -64,7 +52,6 @@ func TestNewConfiguration(t *testing.T) {
 				t.Setenv("LOG_LEVEL", "debug")
 				t.Setenv("POSTGRES_PORT", "6543")
 				t.Setenv("POSTGRES_MAX_CONN_LIFETIME", "30m")
-				t.Setenv("NATS_PORT", "14222")
 			},
 			expected: func(t *testing.T, cfg Configuration) {
 				t.Helper()
@@ -72,7 +59,6 @@ func TestNewConfiguration(t *testing.T) {
 				assert.Equal(t, "debug", cfg.LogLevel())
 				assert.Equal(t, uint16(6543), cfg.PostgresPort())
 				assert.Equal(t, 30*time.Minute, cfg.PostgresMaxConnLifeTime())
-				assert.Equal(t, 14222, cfg.NatsPort())
 			},
 		},
 		{
@@ -121,21 +107,6 @@ func TestNewConfiguration(t *testing.T) {
 			title:         "failure - rejects empty postgres password",
 			setup:         func(t *testing.T) { t.Setenv("POSTGRES_PASSWORD", "") },
 			expectedError: `env: environment variable "POSTGRES_PASSWORD" should not be empty`,
-		},
-		{
-			title:         "failure - rejects empty nats host",
-			setup:         func(t *testing.T) { t.Setenv("NATS_HOST", "") },
-			expectedError: `env: environment variable "NATS_HOST" should not be empty`,
-		},
-		{
-			title:         "failure - rejects empty nats username",
-			setup:         func(t *testing.T) { t.Setenv("NATS_USERNAME", "") },
-			expectedError: `env: environment variable "NATS_USERNAME" should not be empty`,
-		},
-		{
-			title:         "failure - rejects empty nats password",
-			setup:         func(t *testing.T) { t.Setenv("NATS_PASSWORD", "") },
-			expectedError: `env: environment variable "NATS_PASSWORD" should not be empty`,
 		},
 	}
 
