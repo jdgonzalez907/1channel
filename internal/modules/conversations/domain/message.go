@@ -18,20 +18,18 @@ func NewMessageStatus(value string) (MessageStatus, error) {
 func (s MessageStatus) Value() string { return string(s) }
 
 type Message struct {
-	id         string
-	externalID string
-	text       string
-	status     MessageStatus
-	fromAgent  bool
-	createdAt  time.Time
-	updatedAt  *time.Time
-	deletedAt  *time.Time
-	readAt     *time.Time
+	id        string
+	text      string
+	status    MessageStatus
+	fromAgent bool
+	createdAt time.Time
+	updatedAt *time.Time
+	deletedAt *time.Time
+	readAt    *time.Time
 }
 
 func NewMessage(
 	id string,
-	externalID string,
 	text string,
 	status MessageStatus,
 	fromAgent bool,
@@ -41,20 +39,18 @@ func NewMessage(
 	readAt *time.Time,
 ) (*Message, error) {
 	return &Message{
-		id:         id,
-		externalID: externalID,
-		text:       text,
-		status:     status,
-		fromAgent:  fromAgent,
-		createdAt:  createdAt,
-		updatedAt:  updatedAt,
-		deletedAt:  deletedAt,
-		readAt:     readAt,
+		id,
+		text,
+		status,
+		fromAgent,
+		createdAt,
+		updatedAt,
+		deletedAt,
+		readAt,
 	}, nil
 }
 
 func (m *Message) ID() string            { return m.id }
-func (m *Message) ExternalID() string    { return m.externalID }
 func (m *Message) Text() string          { return m.text }
 func (m *Message) Status() MessageStatus { return m.status }
 func (m *Message) FromAgent() bool       { return m.fromAgent }
