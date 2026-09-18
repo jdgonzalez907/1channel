@@ -1,197 +1,246 @@
-package conversations
+package domain
 
 import (
 	"errors"
 	"time"
+	"uuid"
 )
 
-type ConversationStatus string
-
 const (
-	Pending  ConversationStatus = "pending"
-	Assigned ConversationStatus = "assigned"
-	Expired  ConversationStatus = "expired"
-	Resolved ConversationStatus = "resolved"
+	maxUnreadCount int8 = 100
+	minUnreadCount int8 = 0
 )
 
 var (
-	ErrInvalidState         = errors.New("invalid state")
-	ErrConversationExpired  = errors.New("conversation expired")
-	ErrConversationResolved = errors.New("conversation resolved")
-	ErrUnauthorizedAgent    = errors.New("unauthorized agent")
-	ErrMessageNotFound      = errors.New("message not found")
+	ErrUnauthorizedAgent       = errors.New("unauthorized agent")
+	ErrUnauthorizedContact     = errors.New("unauthorized contact")
+	ErrMessageNotFound         = errors.New("message not found")
+	ErrConversationClosed      = errors.New("conversation closed")
+	ErrConversationNotFound    = errors.New("conversation not found")
+	ErrMessageAlreadyExists    = errors.New("message already exists")
+	ErrConversationNotAssigned = errors.New("conversation not assigned")
 )
 
-func NewConversationStatus(value string) (ConversationStatus, error) {
-	return ConversationStatus(value), nil
-}
-
-func (s ConversationStatus) Value() string { return string(s) }
-
 type Conversation struct {
-	id              string
+	id              uuid.UUID
 	status          ConversationStatus
-	foundMessages   map[string]*Message
-	addedMessages   map[string]*Message
-	updatedMessages map[string]*Message
-	deletedMessages map[string]*Message
-	unreadCount     int
-	agentID         *string
-	contactID       string
+	foundMessages   map[uuid.UUID]*Message
+	addedMessages   map[uuid.UUID]*Message
+	updatedMessages map[uuid.UUID]*Message
+	deletedMessages map[uuid.UUID]*Message
+	unreadCount     int8
+	agentID         *uuid.UUID
+	contactID       uuid.UUID
 	createdAt       time.Time
 	updatedAt       *time.Time
 	finishedAt      *time.Time
-	deletedAt       *time.Time
 }
 
 func NewConversation(
-	id string,
+	id uuid.UUID,
 	status ConversationStatus,
-	foundMessages map[string]*Message,
-	addedMessages map[string]*Message,
-	updatedMessages map[string]*Message,
-	deletedMessages map[string]*Message,
-	unreadCount int,
-	agentID *string,
-	contactID string,
+	foundMessages map[uuid.UUID]*Message,
+	unreadCount int8,
+	agentID *uuid.UUID,
+	contactID uuid.UUID,
 	createdAt time.Time,
 	updatedAt *time.Time,
 	finishedAt *time.Time,
-	deletedAt *time.Time,
 ) (*Conversation, error) {
+	if foundMessages == nil {
+		foundMessages = make(map[uuid.UUID]*Message)
+	}
+
 	return &Conversation{
 		id,
 		status,
 		foundMessages,
-		addedMessages,
-		updatedMessages,
-		deletedMessages,
+		make(map[uuid.UUID]*Message),
+		make(map[uuid.UUID]*Message),
+		make(map[uuid.UUID]*Message),
 		unreadCount,
 		agentID,
 		contactID,
 		createdAt,
 		updatedAt,
 		finishedAt,
-		deletedAt,
 	}, nil
 }
 
-func (c *Conversation) ID() string                           { return c.id }
-func (c *Conversation) Status() ConversationStatus           { return c.status }
-func (c *Conversation) FoundMessages() map[string]*Message   { return c.foundMessages }
-func (c *Conversation) AddedMessages() map[string]*Message   { return c.addedMessages }
-func (c *Conversation) UpdatedMessages() map[string]*Message { return c.updatedMessages }
-func (c *Conversation) DeletedMessages() map[string]*Message { return c.deletedMessages }
-func (c *Conversation) UnreadCount() int                     { return c.unreadCount }
-func (c *Conversation) AgentID() *string                     { return c.agentID }
-func (c *Conversation) ContactID() string                    { return c.contactID }
-func (c *Conversation) CreatedAt() time.Time                 { return c.createdAt }
-func (c *Conversation) UpdatedAt() *time.Time                { return c.updatedAt }
-func (c *Conversation) FinishedAt() *time.Time               { return c.finishedAt }
-func (c *Conversation) DeletedAt() *time.Time                { return c.deletedAt }
-func (c *Conversation) CanAddMessage() bool {
-	if c.status == Expired || c.status == Resolved {
-		return false
+func (c *Conversation) ID() uuid.UUID              { return c.id }
+func (c *Conversation) Status() ConversationStatus { return c.status }
+func (c *Conversation) UnreadCount() int8          { return c.unreadCount }
+func (c *Conversation) AgentID() *uuid.UUID        { return c.agentID }
+func (c *Conversation) ContactID() uuid.UUID       { return c.contactID }
+func (c *Conversation) CreatedAt() time.Time       { return c.createdAt }
+func (c *Conversation) UpdatedAt() *time.Time      { return c.updatedAt }
+func (c *Conversation) FinishedAt() *time.Time     { return c.finishedAt }
+func (c *Conversation) hasExternalID(externalID string) bool {
+	for _, message := range c.foundMessages {
+		extID := message.ExternalID()
+		if extID != nil && *extID == externalID {
+			return true
+		}
 	}
-	return true
+	return false
 }
-func (c *Conversation) AddMessage(messageID, text string, contactID *string, receivedAt time.Time) error {
-	_, ok := c.foundMessages[messageID]
-	if ok {
-		return nil
+func (c *Conversation) findContactMessageByExternalID(contactID uuid.UUID, externalMessageID string) *Message {
+	var found *Message
+	for _, message := range c.foundMessages {
+		if message.ExternalID() != nil && *message.ExternalID() == externalMessageID &&
+			message.ContactID() != nil && *message.ContactID() == contactID {
+			found = message
+			break
+		}
 	}
 
-	fromAgent := contactID == nil
-	var status MessageStatus
-	if !fromAgent {
-		status = Delivered
-	} else {
-		status = Sent
+	return found
+}
+func (c *Conversation) IsClosed(at time.Time) bool {
+	return (c.status == Expired || c.status == Resolved) &&
+		c.finishedAt != nil && c.finishedAt.Before(at)
+}
+func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text string, at time.Time) error {
+	if c.IsClosed(at) {
+		return ErrConversationClosed
 	}
 
-	newMessage, err := NewMessage(messageID, text, status, fromAgent, receivedAt, nil, nil, nil)
+	if c.agentID == nil {
+		c.agentID = &agentID
+		c.status = Assigned
+		c.AgentReadConversation(agentID, at)
+	}
+
+	if *c.agentID != agentID {
+		return ErrUnauthorizedAgent
+	}
+
+	message, err := NewMessage(messageID, nil, text, Registered, &agentID, nil, at, nil, nil, nil)
 	if err != nil {
 		return err
 	}
 
-	if fromAgent {
-		c.status = Assigned
-	}
+	c.foundMessages[messageID] = message
+	c.addedMessages[messageID] = message
 
-	c.addedMessages[messageID] = newMessage
-	c.foundMessages[messageID] = newMessage
-	c.updatedAt = &receivedAt
+	c.updatedAt = &at
 
 	return nil
 }
-func (c *Conversation) UpdateMessage(messageID, text string, editedAt time.Time) error {
-	found, ok := c.foundMessages[messageID]
-	if !ok {
+func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) error {
+	if c.agentID == nil {
+		return ErrConversationNotAssigned
+	}
+
+	if *c.agentID != agentID {
+		return ErrUnauthorizedAgent
+	}
+
+	hasUpdates := false
+	for _, message := range c.foundMessages {
+		if message.ContactID() != nil && message.Read(at) {
+			c.updatedMessages[message.ID()] = message
+			hasUpdates = true
+		}
+	}
+
+	if hasUpdates {
+		c.unreadCount = minUnreadCount
+		c.updatedAt = &at
+	}
+
+	return nil
+}
+func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, externalMessageID string, text string, at time.Time) error {
+	if c.hasExternalID(externalMessageID) {
+		return ErrMessageAlreadyExists
+	}
+
+	if c.contactID != contactID {
+		return ErrUnauthorizedContact
+	}
+
+	if c.IsClosed(at) {
+		return ErrConversationClosed
+	}
+
+	message, err := NewMessage(messageID, &externalMessageID, text, Delivered, nil, &contactID, at, nil, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	c.foundMessages[messageID] = message
+	c.addedMessages[messageID] = message
+
+	c.addUnread(at)
+
+	return nil
+}
+func (c *Conversation) ContactUpdateTextMessage(contactID uuid.UUID, externalMessageID, text string, at time.Time) error {
+	if c.IsClosed(at) {
+		return ErrConversationClosed
+	}
+
+	if c.contactID != contactID {
+		return ErrUnauthorizedContact
+	}
+
+	message := c.findContactMessageByExternalID(contactID, externalMessageID)
+	if message == nil {
 		return ErrMessageNotFound
 	}
 
-	if found.updatedAt != nil && found.updatedAt.UTC().Equal(editedAt) {
-		return nil
-	}
+	message.UpdateText(text, at)
 
-	found.text = text
-	found.updatedAt = &editedAt
-
-	c.updatedMessages[messageID] = found
-	c.foundMessages[messageID] = found
-	c.updatedAt = &editedAt
+	c.updatedMessages[message.ID()] = message
+	c.updatedAt = &at
 
 	return nil
 }
-func (c *Conversation) DeleteMessage(messageID string, deletedAt time.Time) error {
-	found, ok := c.foundMessages[messageID]
-	if !ok {
+func (c *Conversation) ContactDeleteMessage(contactID uuid.UUID, externalMessageID string, at time.Time) error {
+	if c.IsClosed(at) {
+		return ErrConversationClosed
+	}
+
+	if c.contactID != contactID {
+		return ErrUnauthorizedContact
+	}
+
+	message := c.findContactMessageByExternalID(contactID, externalMessageID)
+	if message == nil {
 		return ErrMessageNotFound
 	}
 
-	if found.deletedAt != nil {
-		return nil
+	wasUnread := message.Status() != Read
+	if message.Delete(at) {
+		c.deletedMessages[message.ID()] = message
+
+		if wasUnread {
+			c.substractUnread(at)
+		}
+
+		c.updatedAt = &at
 	}
-
-	found.deletedAt = &deletedAt
-	found.status = Deleted
-
-	c.deletedMessages[messageID] = found
-	c.foundMessages[messageID] = found
-	c.updatedAt = &deletedAt
 
 	return nil
 }
-func (c *Conversation) MarkMessageRead(messageID string, readAt time.Time) error {
-	found, ok := c.foundMessages[messageID]
-	if !ok {
-		return ErrMessageNotFound
+func (c *Conversation) addUnread(at time.Time) {
+	c.updatedAt = &at
+
+	if c.unreadCount >= maxUnreadCount {
+		c.unreadCount = maxUnreadCount
+		return
 	}
 
-	if found.readAt != nil && found.readAt.UTC().Equal(readAt) {
-		return nil
-	}
-
-	found.readAt = &readAt
-	found.status = Read
-
-	c.updatedMessages[messageID] = found
-	c.foundMessages[messageID] = found
-	c.unreadCount = 0
-	c.updatedAt = &readAt
-
-	return nil
+	c.unreadCount += 1
 }
+func (c *Conversation) substractUnread(at time.Time) {
+	c.updatedAt = &at
 
-type ConversationDTO struct {
-	ID          string             `json:"id"`
-	Status      ConversationStatus `json:"status"`
-	Messages    []MessageDTO       `json:"messages"`
-	UnreadCount int                `json:"unread_count"`
-	AgentID     string             `json:"agent_id"`
-	ContactID   string             `json:"contact_id"`
-	CreatedAt   time.Time          `json:"created_at"`
-	UpdatedAt   *time.Time         `json:"updated_at,omitempty"`
-	FinishedAt  *time.Time         `json:"finished_at,omitempty"`
-	DeletedAt   *time.Time         `json:"deleted_at,omitempty"`
+	if c.unreadCount <= minUnreadCount {
+		c.unreadCount = minUnreadCount
+		return
+	}
+
+	c.unreadCount -= 1
 }
