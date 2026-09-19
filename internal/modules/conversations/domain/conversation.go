@@ -151,6 +151,18 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 
 	return nil
 }
+func (c *Conversation) AssignAgentMessageExternalID(messageID uuid.UUID, externalMessageID string) error {
+	message, ok := c.foundMessages[messageID]
+	if !ok {
+		return ErrMessageNotFound
+	}
+
+	if message.AssignExternalID(externalMessageID) {
+		c.updatedMessages[messageID] = message
+	}
+
+	return nil
+}
 func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, externalMessageID string, text string, at time.Time) error {
 	if c.hasExternalID(externalMessageID) {
 		return ErrMessageAlreadyExists

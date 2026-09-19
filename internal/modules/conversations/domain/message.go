@@ -82,3 +82,12 @@ func (m *Message) Delete(at time.Time) bool {
 
 	return true
 }
+func (m *Message) AssignExternalID(externalID string) bool {
+	if m.externalID != nil {
+		return false
+	}
+
+	m.externalID = &externalID
+
+	return true
+}

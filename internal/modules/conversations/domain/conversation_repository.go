@@ -9,5 +9,6 @@ type ConversationRepository interface {
 	FindByID(ctx context.Context, id uuid.UUID) (*Conversation, error)
 	FindLastOpenByContactID(ctx context.Context, contactID uuid.UUID) (*Conversation, error)
 	FindWithSpecificMessageByExternalID(ctx context.Context, externalMessageID string) (*Conversation, error)
+	FindWithSpecificMessageByMessageID(ctx context.Context, messageID uuid.UUID) (*Conversation, error)
 	Save(ctx context.Context, conversation *Conversation) error
 }
