@@ -30,7 +30,7 @@ func TestAgentsAPIFindAgentByID(t *testing.T) {
 	agentID := uuid.NewV7()
 	createdAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 
-	agent, err := domain.NewAgent(agentID, "jane.doe", createdAt)
+	agent, err := domain.NewAgent(agentID, createdAt)
 	require.NoError(t, err)
 
 	useCaseInput := application.FindAgentByIDInput{ID: agentID}

@@ -17,12 +17,11 @@ func TestNewAgent(t *testing.T) {
 	// (inputs are inline)
 
 	// Act
-	agent, err := NewAgent(id, "jane.doe", createdAt)
+	agent, err := NewAgent(id, createdAt)
 
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, agent)
 	assert.Equal(t, id, agent.ID())
-	assert.Equal(t, "jane.doe", agent.Username())
 	assert.Equal(t, createdAt, agent.CreatedAt())
 }
