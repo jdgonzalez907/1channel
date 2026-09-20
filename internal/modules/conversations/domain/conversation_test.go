@@ -74,20 +74,18 @@ func TestNewConversation(t *testing.T) {
 			// Arrange
 			contactID := uuid.NewV7()
 			id := uuid.NewV7()
-			foundMessages := map[uuid.UUID]*Message{}
+			messages := map[uuid.UUID]*Message{}
 
 			// Act
-			conversation, err := NewConversation(id, tt.status, foundMessages, tt.unreadCount, tt.agentID, contactID, baseTime, tt.updatedAt, tt.finishedAt)
+			conversation, err := NewConversation(id, tt.status, messages, tt.unreadCount, tt.agentID, contactID, baseTime, tt.updatedAt, tt.finishedAt)
 
 			// Assert
 			require.NoError(t, err)
 			require.NotNil(t, conversation)
 			assert.Equal(t, id, conversation.ID())
 			assert.Equal(t, tt.status, conversation.Status())
-			assert.Empty(t, conversation.foundMessages)
-			assert.Empty(t, conversation.addedMessages)
-			assert.Empty(t, conversation.updatedMessages)
-			assert.Empty(t, conversation.deletedMessages)
+			assert.Empty(t, conversation.messages)
+			assert.Empty(t, conversation.dirtyMessages)
 			assert.Equal(t, tt.unreadCount, conversation.UnreadCount())
 			assert.Equal(t, tt.agentID, conversation.AgentID())
 			assert.Equal(t, contactID, conversation.ContactID())
@@ -108,8 +106,8 @@ func TestNewConversationWithNilFoundMessages(t *testing.T) {
 	// Assert
 	require.NoError(t, err)
 	require.NotNil(t, conversation)
-	assert.NotNil(t, conversation.foundMessages)
-	assert.Empty(t, conversation.foundMessages)
+	assert.NotNil(t, conversation.messages)
+	assert.Empty(t, conversation.messages)
 }
 
 func TestIsClosed(t *testing.T) {
@@ -241,14 +239,14 @@ func TestAgentSendMessage(t *testing.T) {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedError, err.Error())
 				assert.Equal(t, tt.expectedConvStatus, conversation.Status())
-				assert.NotContains(t, conversation.foundMessages, messageID)
+				assert.NotContains(t, conversation.messages, messageID)
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedConvStatus, conversation.Status())
-			message, ok := conversation.foundMessages[messageID]
+			message, ok := conversation.messages[messageID]
 			require.True(t, ok)
-			assert.Same(t, conversation.addedMessages[messageID], message)
+			assert.Same(t, conversation.dirtyMessages[messageID], message)
 			assert.Equal(t, Registered, message.Status())
 			assert.Nil(t, message.ExternalID())
 			require.NotNil(t, message.AgentID())
@@ -318,10 +316,10 @@ func TestAgentReadConversation(t *testing.T) {
 			contactMessage := newTestContactMessage(t, conversation.contactID, Delivered, "wa-contact-1")
 			agentMessage := newTestAgentMessage(t, agentID, Registered)
 			if tt.withContactMessage {
-				conversation.foundMessages[contactMessage.ID()] = contactMessage
+				conversation.messages[contactMessage.ID()] = contactMessage
 			}
 			if tt.withAgentMessage {
-				conversation.foundMessages[agentMessage.ID()] = agentMessage
+				conversation.messages[agentMessage.ID()] = agentMessage
 			}
 
 			// Act
@@ -337,8 +335,8 @@ func TestAgentReadConversation(t *testing.T) {
 			assert.Equal(t, Read, contactMessage.Status())
 			require.NotNil(t, contactMessage.ReadAt())
 			assert.True(t, readAt.Equal(*contactMessage.ReadAt()))
-			assert.Same(t, conversation.updatedMessages[contactMessage.ID()], contactMessage)
-			assert.NotContains(t, conversation.updatedMessages, agentMessage.ID())
+			assert.Same(t, conversation.dirtyMessages[contactMessage.ID()], contactMessage)
+			assert.NotContains(t, conversation.dirtyMessages, agentMessage.ID())
 			assert.Equal(t, Registered, agentMessage.Status())
 			assert.Equal(t, minUnreadCount, conversation.UnreadCount())
 			require.NotNil(t, conversation.UpdatedAt())
@@ -352,14 +350,14 @@ func TestAgentReadConversationWithoutContactMessages(t *testing.T) {
 	agentID := uuid.NewV7()
 	conversation := newTestConversation(t, Assigned, &agentID, 0, nil)
 	agentMessage := newTestAgentMessage(t, agentID, Registered)
-	conversation.foundMessages[agentMessage.ID()] = agentMessage
+	conversation.messages[agentMessage.ID()] = agentMessage
 
 	// Act
 	err := conversation.AgentReadConversation(agentID, baseTime.Add(time.Hour))
 
 	// Assert
 	require.NoError(t, err)
-	assert.Empty(t, conversation.updatedMessages)
+	assert.Empty(t, conversation.dirtyMessages)
 	assert.Nil(t, conversation.UpdatedAt())
 	assert.Equal(t, minUnreadCount, conversation.UnreadCount())
 }
@@ -405,7 +403,7 @@ func TestAssignAgentMessageExternalID(t *testing.T) {
 			message := newTestAgentMessage(t, agentID, Registered)
 			message.externalID = tt.currentExternal
 			if tt.messageExists {
-				conversation.foundMessages[message.ID()] = message
+				conversation.messages[message.ID()] = message
 			}
 
 			// Act
@@ -415,16 +413,16 @@ func TestAssignAgentMessageExternalID(t *testing.T) {
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedError, err.Error())
-				assert.Empty(t, conversation.updatedMessages)
+				assert.Empty(t, conversation.dirtyMessages)
 				return
 			}
 			require.NoError(t, err)
 			require.NotNil(t, message.ExternalID())
 			assert.Equal(t, channelID, *message.ExternalID())
 			if tt.expectTracked {
-				assert.Same(t, conversation.updatedMessages[message.ID()], message)
+				assert.Same(t, conversation.dirtyMessages[message.ID()], message)
 			} else {
-				assert.Empty(t, conversation.updatedMessages)
+				assert.Empty(t, conversation.dirtyMessages)
 			}
 		})
 	}
@@ -500,7 +498,7 @@ func TestReceiveContactMessage(t *testing.T) {
 			}
 			if tt.duplicate {
 				duplicate := newTestContactMessage(t, conversation.contactID, Delivered, externalID)
-				conversation.foundMessages[duplicate.ID()] = duplicate
+				conversation.messages[duplicate.ID()] = duplicate
 			}
 
 			// Act
@@ -510,13 +508,13 @@ func TestReceiveContactMessage(t *testing.T) {
 			if tt.expectedError != "" {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedError, err.Error())
-				assert.NotContains(t, conversation.foundMessages, messageID)
+				assert.NotContains(t, conversation.messages, messageID)
 				return
 			}
 			require.NoError(t, err)
-			message, ok := conversation.foundMessages[messageID]
+			message, ok := conversation.messages[messageID]
 			require.True(t, ok)
-			assert.Same(t, conversation.addedMessages[messageID], message)
+			assert.Same(t, conversation.dirtyMessages[messageID], message)
 			assert.Equal(t, Delivered, message.Status())
 			require.NotNil(t, message.ExternalID())
 			assert.Equal(t, externalID, *message.ExternalID())
@@ -584,7 +582,7 @@ func TestContactUpdateTextMessage(t *testing.T) {
 			conversation := newTestConversation(t, tt.convStatus, &agentID, 0, finishedAt)
 			message := newTestContactMessage(t, conversation.contactID, Delivered, externalID)
 			if tt.knownExternal {
-				conversation.foundMessages[message.ID()] = message
+				conversation.messages[message.ID()] = message
 			}
 			senderContactID := conversation.contactID
 			if tt.otherContact {
@@ -599,14 +597,14 @@ func TestContactUpdateTextMessage(t *testing.T) {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedError, err.Error())
 				assert.Equal(t, "contact text", message.Text())
-				assert.Empty(t, conversation.updatedMessages)
+				assert.Empty(t, conversation.dirtyMessages)
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, "edited text", message.Text())
 			require.NotNil(t, message.UpdatedAt())
 			assert.True(t, editedAt.Equal(*message.UpdatedAt()))
-			assert.Same(t, conversation.updatedMessages[message.ID()], message)
+			assert.Same(t, conversation.dirtyMessages[message.ID()], message)
 			require.NotNil(t, conversation.UpdatedAt())
 			assert.True(t, editedAt.Equal(*conversation.UpdatedAt()))
 		})
@@ -709,7 +707,7 @@ func TestContactDeleteMessage(t *testing.T) {
 				message.deletedAt = &firstDelete
 			}
 			if tt.knownExternal {
-				conversation.foundMessages[message.ID()] = message
+				conversation.messages[message.ID()] = message
 			}
 			senderContactID := conversation.contactID
 			if tt.otherContact {
@@ -724,18 +722,18 @@ func TestContactDeleteMessage(t *testing.T) {
 				require.Error(t, err)
 				assert.Equal(t, tt.expectedError, err.Error())
 				assert.NotEqual(t, Deleted, message.Status())
-				assert.Empty(t, conversation.deletedMessages)
+				assert.Empty(t, conversation.dirtyMessages)
 				return
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedUnread, conversation.UnreadCount())
 			if tt.expectTracked {
-				assert.Same(t, conversation.deletedMessages[message.ID()], message)
+				assert.Same(t, conversation.dirtyMessages[message.ID()], message)
 				require.NotNil(t, message.DeletedAt())
 				assert.True(t, deletedAt.Equal(*message.DeletedAt()))
 				require.NotNil(t, conversation.UpdatedAt())
 			} else {
-				assert.Empty(t, conversation.deletedMessages)
+				assert.Empty(t, conversation.dirtyMessages)
 				require.NotNil(t, message.DeletedAt())
 				assert.True(t, firstDelete.Equal(*message.DeletedAt()))
 				assert.Nil(t, conversation.UpdatedAt())

@@ -32,9 +32,9 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 	contactID := uuid.NewV7()
 	externalID := "wa-inbound-1"
 
-	newConversation := func(t *testing.T, status domain.ConversationStatus, unreadCount int8, finishedAt *time.Time, foundMessages map[uuid.UUID]*domain.Message) *domain.Conversation {
+	newConversation := func(t *testing.T, status domain.ConversationStatus, unreadCount int8, finishedAt *time.Time, messages map[uuid.UUID]*domain.Message) *domain.Conversation {
 		t.Helper()
-		conversation, err := domain.NewConversation(conversationID, status, foundMessages, unreadCount, nil, contactID, createdAt, nil, finishedAt)
+		conversation, err := domain.NewConversation(conversationID, status, messages, unreadCount, nil, contactID, createdAt, nil, finishedAt)
 		require.NoError(t, err)
 		return conversation
 	}

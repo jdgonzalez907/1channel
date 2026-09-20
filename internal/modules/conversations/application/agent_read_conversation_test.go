@@ -34,9 +34,9 @@ func TestAgentReadConversationExecute(t *testing.T) {
 	messageID := uuid.NewV7()
 	externalID := "wa-inbound-1"
 
-	newConversation := func(t *testing.T, status domain.ConversationStatus, agent *uuid.UUID, unreadCount int8, foundMessages map[uuid.UUID]*domain.Message) *domain.Conversation {
+	newConversation := func(t *testing.T, status domain.ConversationStatus, agent *uuid.UUID, unreadCount int8, messages map[uuid.UUID]*domain.Message) *domain.Conversation {
 		t.Helper()
-		conversation, err := domain.NewConversation(conversationID, status, foundMessages, unreadCount, agent, contactID, createdAt, nil, nil)
+		conversation, err := domain.NewConversation(conversationID, status, messages, unreadCount, agent, contactID, createdAt, nil, nil)
 		require.NoError(t, err)
 		return conversation
 	}

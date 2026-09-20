@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"slices"
 	"time"
 	"uuid"
 )
@@ -22,24 +23,22 @@ var (
 )
 
 type Conversation struct {
-	id              uuid.UUID
-	status          ConversationStatus
-	foundMessages   map[uuid.UUID]*Message
-	addedMessages   map[uuid.UUID]*Message
-	updatedMessages map[uuid.UUID]*Message
-	deletedMessages map[uuid.UUID]*Message
-	unreadCount     int8
-	agentID         *uuid.UUID
-	contactID       uuid.UUID
-	createdAt       time.Time
-	updatedAt       *time.Time
-	finishedAt      *time.Time
+	id            uuid.UUID
+	status        ConversationStatus
+	messages      map[uuid.UUID]*Message
+	dirtyMessages map[uuid.UUID]*Message
+	unreadCount   int8
+	agentID       *uuid.UUID
+	contactID     uuid.UUID
+	createdAt     time.Time
+	updatedAt     *time.Time
+	finishedAt    *time.Time
 }
 
 func NewConversation(
 	id uuid.UUID,
 	status ConversationStatus,
-	foundMessages map[uuid.UUID]*Message,
+	messages map[uuid.UUID]*Message,
 	unreadCount int8,
 	agentID *uuid.UUID,
 	contactID uuid.UUID,
@@ -47,16 +46,14 @@ func NewConversation(
 	updatedAt *time.Time,
 	finishedAt *time.Time,
 ) (*Conversation, error) {
-	if foundMessages == nil {
-		foundMessages = make(map[uuid.UUID]*Message)
+	if messages == nil {
+		messages = make(map[uuid.UUID]*Message)
 	}
 
 	return &Conversation{
 		id,
 		status,
-		foundMessages,
-		make(map[uuid.UUID]*Message),
-		make(map[uuid.UUID]*Message),
+		messages,
 		make(map[uuid.UUID]*Message),
 		unreadCount,
 		agentID,
@@ -75,8 +72,22 @@ func (c *Conversation) ContactID() uuid.UUID       { return c.contactID }
 func (c *Conversation) CreatedAt() time.Time       { return c.createdAt }
 func (c *Conversation) UpdatedAt() *time.Time      { return c.updatedAt }
 func (c *Conversation) FinishedAt() *time.Time     { return c.finishedAt }
+func (c *Conversation) Messages() []*Message       { return sortedByCreatedAt(c.messages) }
+func (c *Conversation) DirtyMessages() []*Message  { return sortedByCreatedAt(c.dirtyMessages) }
+func sortedByCreatedAt(messages map[uuid.UUID]*Message) []*Message {
+	sorted := make([]*Message, 0, len(messages))
+	for _, message := range messages {
+		sorted = append(sorted, message)
+	}
+
+	slices.SortFunc(sorted, func(a, b *Message) int {
+		return a.createdAt.Compare(b.createdAt)
+	})
+
+	return sorted
+}
 func (c *Conversation) hasExternalID(externalID string) bool {
-	for _, message := range c.foundMessages {
+	for _, message := range c.messages {
 		extID := message.ExternalID()
 		if extID != nil && *extID == externalID {
 			return true
@@ -86,7 +97,7 @@ func (c *Conversation) hasExternalID(externalID string) bool {
 }
 func (c *Conversation) findContactMessageByExternalID(contactID uuid.UUID, externalMessageID string) *Message {
 	var found *Message
-	for _, message := range c.foundMessages {
+	for _, message := range c.messages {
 		if message.ExternalID() != nil && *message.ExternalID() == externalMessageID &&
 			message.ContactID() != nil && *message.ContactID() == contactID {
 			found = message
@@ -120,8 +131,8 @@ func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text strin
 		return err
 	}
 
-	c.foundMessages[messageID] = message
-	c.addedMessages[messageID] = message
+	c.messages[messageID] = message
+	c.dirtyMessages[messageID] = message
 
 	c.updatedAt = &at
 
@@ -137,9 +148,9 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 	}
 
 	hasUpdates := false
-	for _, message := range c.foundMessages {
+	for _, message := range c.messages {
 		if message.ContactID() != nil && message.Read(at) {
-			c.updatedMessages[message.ID()] = message
+			c.dirtyMessages[message.ID()] = message
 			hasUpdates = true
 		}
 	}
@@ -152,13 +163,13 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 	return nil
 }
 func (c *Conversation) AssignAgentMessageExternalID(messageID uuid.UUID, externalMessageID string) error {
-	message, ok := c.foundMessages[messageID]
+	message, ok := c.messages[messageID]
 	if !ok {
 		return ErrMessageNotFound
 	}
 
 	if message.AssignExternalID(externalMessageID) {
-		c.updatedMessages[messageID] = message
+		c.dirtyMessages[messageID] = message
 	}
 
 	return nil
@@ -181,8 +192,8 @@ func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, ext
 		return err
 	}
 
-	c.foundMessages[messageID] = message
-	c.addedMessages[messageID] = message
+	c.messages[messageID] = message
+	c.dirtyMessages[messageID] = message
 
 	c.addUnread(at)
 
@@ -204,7 +215,7 @@ func (c *Conversation) ContactUpdateTextMessage(contactID uuid.UUID, externalMes
 
 	message.UpdateText(text, at)
 
-	c.updatedMessages[message.ID()] = message
+	c.dirtyMessages[message.ID()] = message
 	c.updatedAt = &at
 
 	return nil
@@ -225,7 +236,7 @@ func (c *Conversation) ContactDeleteMessage(contactID uuid.UUID, externalMessage
 
 	wasUnread := message.Status() != Read
 	if message.Delete(at) {
-		c.deletedMessages[message.ID()] = message
+		c.dirtyMessages[message.ID()] = message
 
 		if wasUnread {
 			c.substractUnread(at)
