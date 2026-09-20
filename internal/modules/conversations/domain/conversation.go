@@ -86,6 +86,11 @@ func sortedByCreatedAt(messages map[uuid.UUID]*Message) []*Message {
 
 	return sorted
 }
+func (c *Conversation) updateUpdatedAt(at time.Time) {
+	if c.updatedAt == nil || at.After(*c.updatedAt) {
+		c.updatedAt = &at
+	}
+}
 func (c *Conversation) hasExternalID(externalID string) bool {
 	for _, message := range c.messages {
 		extID := message.ExternalID()
@@ -134,7 +139,7 @@ func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text strin
 	c.messages[messageID] = message
 	c.dirtyMessages[messageID] = message
 
-	c.updatedAt = &at
+	c.updateUpdatedAt(at)
 
 	return nil
 }
@@ -157,7 +162,7 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 
 	if hasUpdates {
 		c.unreadCount = minUnreadCount
-		c.updatedAt = &at
+		c.updateUpdatedAt(at)
 	}
 
 	return nil
@@ -216,7 +221,7 @@ func (c *Conversation) ContactUpdateTextMessage(contactID uuid.UUID, externalMes
 	message.UpdateText(text, at)
 
 	c.dirtyMessages[message.ID()] = message
-	c.updatedAt = &at
+	c.updateUpdatedAt(at)
 
 	return nil
 }
@@ -242,13 +247,13 @@ func (c *Conversation) ContactDeleteMessage(contactID uuid.UUID, externalMessage
 			c.substractUnread(at)
 		}
 
-		c.updatedAt = &at
+		c.updateUpdatedAt(at)
 	}
 
 	return nil
 }
 func (c *Conversation) addUnread(at time.Time) {
-	c.updatedAt = &at
+	c.updateUpdatedAt(at)
 
 	if c.unreadCount >= maxUnreadCount {
 		c.unreadCount = maxUnreadCount
@@ -258,7 +263,7 @@ func (c *Conversation) addUnread(at time.Time) {
 	c.unreadCount += 1
 }
 func (c *Conversation) substractUnread(at time.Time) {
-	c.updatedAt = &at
+	c.updateUpdatedAt(at)
 
 	if c.unreadCount <= minUnreadCount {
 		c.unreadCount = minUnreadCount
