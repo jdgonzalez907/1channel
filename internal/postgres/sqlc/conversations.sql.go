@@ -8,8 +8,8 @@ package sqlc
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"uuid"
 )
 
 const batchUpsertMessages = `-- name: BatchUpsertMessages :exec
@@ -281,7 +281,7 @@ type UpsertConversationParams struct {
 	ID          uuid.UUID          `json:"id"`
 	Status      string             `json:"status"`
 	UnreadCount int16              `json:"unread_count"`
-	AgentID     *uuid.UUID         `json:"agent_id"`
+	AgentID     uuid.UUID          `json:"agent_id"`
 	ContactID   uuid.UUID          `json:"contact_id"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
