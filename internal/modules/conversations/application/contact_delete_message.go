@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 	"time"
-	"uuid"
 
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
 type (
 	ContactDeleteMessageInput struct {
 		ExternalMessageID string
-		ContactID         uuid.UUID
+		ExternalContactID string
 		DeletedAt         time.Time
 	}
 
@@ -22,14 +22,20 @@ type (
 
 	contactDeleteMessage struct {
 		conversationRepository domain.ConversationRepository
+		contactsAPI            contacts.ContactsAPI
 	}
 )
 
-func NewContactDeleteMessage(conversationRepository domain.ConversationRepository) ContactDeleteMessage {
-	return &contactDeleteMessage{conversationRepository}
+func NewContactDeleteMessage(conversationRepository domain.ConversationRepository, contactsAPI contacts.ContactsAPI) ContactDeleteMessage {
+	return &contactDeleteMessage{conversationRepository, contactsAPI}
 }
 
 func (uc *contactDeleteMessage) Execute(ctx context.Context, input ContactDeleteMessageInput) error {
+	contactID, err := uc.contactsAPI.GetOrCreateContactByExternalID(ctx, input.ExternalContactID)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
 	conversation, err := uc.conversationRepository.FindWithSpecificMessageByExternalID(ctx, input.ExternalMessageID)
 	if err != nil {
 		return uc.wrapError(err)
@@ -39,7 +45,7 @@ func (uc *contactDeleteMessage) Execute(ctx context.Context, input ContactDelete
 		return uc.wrapError(domain.ErrConversationNotFound)
 	}
 
-	err = conversation.ContactDeleteMessage(input.ContactID, input.ExternalMessageID, input.DeletedAt)
+	err = conversation.ContactDeleteMessage(contactID, input.ExternalMessageID, input.DeletedAt)
 	if err != nil {
 		return uc.wrapError(err)
 	}

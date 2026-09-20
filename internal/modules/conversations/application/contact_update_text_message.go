@@ -4,15 +4,15 @@ import (
 	"context"
 	"errors"
 	"time"
-	"uuid"
 
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
 type (
 	ContactUpdateTextMessageInput struct {
 		ExternalMessageID string
-		ContactID         uuid.UUID
+		ExternalContactID string
 		Text              string
 		UpdatedAt         time.Time
 	}
@@ -23,14 +23,20 @@ type (
 
 	contactUpdateTextMessage struct {
 		conversationRepository domain.ConversationRepository
+		contactsAPI            contacts.ContactsAPI
 	}
 )
 
-func NewContactUpdateTextMessage(conversationRepository domain.ConversationRepository) ContactUpdateTextMessage {
-	return &contactUpdateTextMessage{conversationRepository}
+func NewContactUpdateTextMessage(conversationRepository domain.ConversationRepository, contactsAPI contacts.ContactsAPI) ContactUpdateTextMessage {
+	return &contactUpdateTextMessage{conversationRepository, contactsAPI}
 }
 
 func (uc *contactUpdateTextMessage) Execute(ctx context.Context, input ContactUpdateTextMessageInput) error {
+	contactID, err := uc.contactsAPI.GetOrCreateContactByExternalID(ctx, input.ExternalContactID)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
 	conversation, err := uc.conversationRepository.FindWithSpecificMessageByExternalID(ctx, input.ExternalMessageID)
 	if err != nil {
 		return uc.wrapError(err)
@@ -40,7 +46,7 @@ func (uc *contactUpdateTextMessage) Execute(ctx context.Context, input ContactUp
 		return uc.wrapError(domain.ErrConversationNotFound)
 	}
 
-	err = conversation.ContactUpdateTextMessage(input.ContactID, input.ExternalMessageID, input.Text, input.UpdatedAt)
+	err = conversation.ContactUpdateTextMessage(contactID, input.ExternalMessageID, input.Text, input.UpdatedAt)
 	if err != nil {
 		return uc.wrapError(err)
 	}

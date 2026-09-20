@@ -6,6 +6,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jdgonzalez907/1channel/internal/modules/agents"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
@@ -22,14 +23,20 @@ type (
 
 	agentReadConversation struct {
 		conversationRepository domain.ConversationRepository
+		agentsAPI              agents.AgentsAPI
 	}
 )
 
-func NewAgentReadConversation(conversationRepository domain.ConversationRepository) AgentReadConversation {
-	return &agentReadConversation{conversationRepository}
+func NewAgentReadConversation(conversationRepository domain.ConversationRepository, agentsAPI agents.AgentsAPI) AgentReadConversation {
+	return &agentReadConversation{conversationRepository, agentsAPI}
 }
 
 func (uc *agentReadConversation) Execute(ctx context.Context, input AgentReadConversationInput) error {
+	agentID, err := uc.agentsAPI.FindAgentByID(ctx, input.AgentID)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
 	conversation, err := uc.conversationRepository.FindByID(ctx, input.ConversationID)
 	if err != nil {
 		return uc.wrapError(err)
@@ -39,7 +46,7 @@ func (uc *agentReadConversation) Execute(ctx context.Context, input AgentReadCon
 		return uc.wrapError(domain.ErrConversationNotFound)
 	}
 
-	err = conversation.AgentReadConversation(input.AgentID, input.ReadAt)
+	err = conversation.AgentReadConversation(agentID, input.ReadAt)
 	if err != nil {
 		if errors.Is(err, domain.ErrConversationNotAssigned) {
 			return nil

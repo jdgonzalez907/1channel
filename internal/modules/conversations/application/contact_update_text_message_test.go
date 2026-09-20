@@ -7,6 +7,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -16,9 +17,10 @@ import (
 func TestNewContactUpdateTextMessage(t *testing.T) {
 	// Arrange
 	repository := &domain.MockConversationRepository{}
+	contactsAPI := &contacts.MockContactsAPI{}
 
 	// Act
-	useCase := NewContactUpdateTextMessage(repository)
+	useCase := NewContactUpdateTextMessage(repository, contactsAPI)
 
 	// Assert
 	require.NotNil(t, useCase)
@@ -31,6 +33,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 	messageID := uuid.NewV7()
 	contactID := uuid.NewV7()
 	otherContactID := uuid.NewV7()
+	externalContactID := "wa-contact-1"
 	externalID := "wa-inbound-1"
 
 	newConversationWithContactMessage := func(t *testing.T) *domain.Conversation {
@@ -44,21 +47,22 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 
 	input := ContactUpdateTextMessageInput{
 		ExternalMessageID: externalID,
-		ContactID:         contactID,
+		ExternalContactID: externalContactID,
 		Text:              "edited text",
 		UpdatedAt:         updatedAt,
 	}
 
 	tests := []struct {
 		title         string
-		setup         func(t *testing.T, m *domain.MockConversationRepository)
+		setup         func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI)
 		input         ContactUpdateTextMessageInput
 		expectedError string
 	}{
 		{
 			title: "success - updates contact message text and persists conversation",
-			setup: func(t *testing.T, m *domain.MockConversationRepository) {
+			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
+				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, mock.MatchedBy(func(saved *domain.Conversation) bool {
@@ -69,9 +73,19 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			expectedError: "",
 		},
 		{
-			title: "failure - wraps repository find error",
-			setup: func(t *testing.T, m *domain.MockConversationRepository) {
+			title: "failure - wraps contacts API error",
+			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
+				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
+			},
+			input:         input,
+			expectedError: "error contact updating text message\ncontacts service unavailable",
+		},
+		{
+			title: "failure - wraps repository find error",
+			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
+				t.Helper()
+				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(nil, errors.New("db connection lost")).Once()
 			},
 			input:         input,
@@ -79,8 +93,9 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 		},
 		{
 			title: "failure - aborts when conversation does not exist",
-			setup: func(t *testing.T, m *domain.MockConversationRepository) {
+			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
+				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(nil, nil).Once()
 			},
 			input:         input,
@@ -88,23 +103,20 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 		},
 		{
 			title: "failure - wraps unauthorized contact error",
-			setup: func(t *testing.T, m *domain.MockConversationRepository) {
+			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
+				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(otherContactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 			},
-			input: ContactUpdateTextMessageInput{
-				ExternalMessageID: externalID,
-				ContactID:         otherContactID,
-				Text:              "edited text",
-				UpdatedAt:         updatedAt,
-			},
+			input:         input,
 			expectedError: "error contact updating text message\n" + domain.ErrUnauthorizedContact.Error(),
 		},
 		{
 			title: "failure - wraps repository save error",
-			setup: func(t *testing.T, m *domain.MockConversationRepository) {
+			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
+				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, conversation).Return(errors.New("save failed")).Once()
@@ -118,10 +130,11 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			// Arrange
 			m := &domain.MockConversationRepository{}
-			tt.setup(t, m)
+			c := &contacts.MockContactsAPI{}
+			tt.setup(t, m, c)
 
 			// Act
-			err := NewContactUpdateTextMessage(m).Execute(context.Background(), tt.input)
+			err := NewContactUpdateTextMessage(m, c).Execute(context.Background(), tt.input)
 
 			// Assert
 			if tt.expectedError != "" {
@@ -131,6 +144,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 				require.NoError(t, err)
 			}
 			m.AssertExpectations(t)
+			c.AssertExpectations(t)
 		})
 	}
 }
