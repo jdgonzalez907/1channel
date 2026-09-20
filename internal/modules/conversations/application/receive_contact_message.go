@@ -6,6 +6,7 @@ import (
 	"time"
 	"uuid"
 
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
@@ -14,7 +15,7 @@ type (
 		ConversationID    uuid.UUID
 		MessageID         uuid.UUID
 		ExternalMessageID string
-		ContactID         uuid.UUID
+		ExternalContactID string
 		Text              string
 		ReceivedAt        time.Time
 	}
@@ -25,27 +26,33 @@ type (
 
 	receiveContactMessage struct {
 		conversationRepository domain.ConversationRepository
+		contactsAPI            contacts.ContactsAPI
 	}
 )
 
-func NewReceiveContactMessage(conversationRepository domain.ConversationRepository) ReceiveContactMessage {
-	return &receiveContactMessage{conversationRepository}
+func NewReceiveContactMessage(conversationRepository domain.ConversationRepository, contactsAPI contacts.ContactsAPI) ReceiveContactMessage {
+	return &receiveContactMessage{conversationRepository, contactsAPI}
 }
 
 func (uc *receiveContactMessage) Execute(ctx context.Context, input ReceiveContactMessageInput) error {
-	conversation, err := uc.conversationRepository.FindLastOpenByContactID(ctx, input.ContactID)
+	contactID, err := uc.contactsAPI.GetOrCreateContactByExternalID(ctx, input.ExternalContactID)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
+	conversation, err := uc.conversationRepository.FindLastOpenByContactID(ctx, contactID)
 	if err != nil {
 		return uc.wrapError(err)
 	}
 
 	if conversation == nil {
-		conversation, err = domain.NewConversation(input.ConversationID, domain.Pending, make(map[uuid.UUID]*domain.Message), 0, nil, input.ContactID, input.ReceivedAt, nil, nil)
+		conversation, err = domain.NewConversation(input.ConversationID, domain.Pending, make(map[uuid.UUID]*domain.Message), 0, nil, contactID, input.ReceivedAt, nil, nil)
 		if err != nil {
 			return uc.wrapError(err)
 		}
 	}
 
-	err = conversation.ReceiveContactMessage(input.MessageID, input.ContactID, input.ExternalMessageID, input.Text, input.ReceivedAt)
+	err = conversation.ReceiveContactMessage(input.MessageID, contactID, input.ExternalMessageID, input.Text, input.ReceivedAt)
 	if err != nil {
 		if errors.Is(err, domain.ErrMessageAlreadyExists) {
 			return nil
