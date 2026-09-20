@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	"uuid"
 
@@ -13,6 +14,7 @@ type (
 	GetOrCreateContactByExternalIDInput struct {
 		ContactID         uuid.UUID
 		ExternalContactID string
+		CreatedAt         time.Time
 	}
 
 	GetOrCreateContactByExternalID interface {
@@ -38,7 +40,7 @@ func (uc *getOrCreateContactByExternalID) Execute(ctx context.Context, input Get
 		return contact, nil
 	}
 
-	contact, err = domain.NewContact(input.ContactID, input.ExternalContactID)
+	contact, err = domain.NewContact(input.ContactID, input.ExternalContactID, input.CreatedAt)
 	if err != nil {
 		return nil, uc.wrapError(err)
 	}

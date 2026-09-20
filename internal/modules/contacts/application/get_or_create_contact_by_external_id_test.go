@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/jdgonzalez907/1channel/internal/modules/contacts/domain"
 	"github.com/stretchr/testify/assert"
@@ -26,13 +27,15 @@ func TestNewGetOrCreateContactByExternalID(t *testing.T) {
 func TestGetOrCreateContactByExternalIDExecute(t *testing.T) {
 	contactID := uuid.NewV7()
 	externalContactID := "wa-contact-1"
+	createdAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 
-	existingContact, err := domain.NewContact(contactID, externalContactID)
+	existingContact, err := domain.NewContact(contactID, externalContactID, createdAt)
 	require.NoError(t, err)
 
 	input := GetOrCreateContactByExternalIDInput{
 		ContactID:         contactID,
 		ExternalContactID: externalContactID,
+		CreatedAt:         createdAt,
 	}
 
 	tests := []struct {
@@ -48,7 +51,7 @@ func TestGetOrCreateContactByExternalIDExecute(t *testing.T) {
 				t.Helper()
 				m.On("FindByExternalContactID", mock.Anything, externalContactID).Return(nil, nil).Once()
 				m.On("Save", mock.Anything, mock.MatchedBy(func(saved *domain.Contact) bool {
-					return saved != nil && saved.ID() == contactID && saved.ExternalContactID() == externalContactID
+					return saved != nil && saved.ID() == contactID && saved.ExternalContactID() == externalContactID && saved.CreatedAt().Equal(createdAt)
 				})).Return(nil).Once()
 			},
 			input:         input,
@@ -84,6 +87,7 @@ func TestGetOrCreateContactByExternalIDExecute(t *testing.T) {
 			input: GetOrCreateContactByExternalIDInput{
 				ContactID:         contactID,
 				ExternalContactID: "",
+				CreatedAt:         createdAt,
 			},
 			expectedID:    uuid.Nil(),
 			expectedError: "error getting or creating contact by external id\n" + domain.ErrExternalContactIDEmpty.Error(),
