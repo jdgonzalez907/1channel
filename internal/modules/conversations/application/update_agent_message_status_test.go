@@ -33,7 +33,7 @@ func TestUpdateAgentMessageStatusExecute(t *testing.T) {
 
 	newConversationWithAgentMessage := func(t *testing.T, status domain.MessageStatus) *domain.Conversation {
 		t.Helper()
-		message, err := domain.NewMessage(messageID, nil, "hello", status, &agentID, nil, createdAt, nil, nil, nil)
+		message, err := domain.NewMessage(messageID, nil, "hello", status, &agentID, nil, createdAt, nil, nil, nil, nil, nil, nil)
 		require.NoError(t, err)
 		conversation, err := domain.NewConversation(conversationID, domain.Assigned, map[uuid.UUID]*domain.Message{messageID: message}, 0, &agentID, contactID, createdAt, nil, nil)
 		require.NoError(t, err)

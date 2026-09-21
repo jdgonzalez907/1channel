@@ -44,7 +44,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 
 	newKnownMessage := func(t *testing.T) *domain.Message {
 		t.Helper()
-		message, err := domain.NewMessage(uuid.NewV7(), &externalID, "hello", domain.Delivered, nil, &contactID, createdAt, nil, nil, nil)
+		message, err := domain.NewMessage(uuid.NewV7(), &externalID, "hello", domain.Delivered, nil, &contactID, createdAt, nil, nil, nil, nil, nil, nil)
 		require.NoError(t, err)
 		return message
 	}

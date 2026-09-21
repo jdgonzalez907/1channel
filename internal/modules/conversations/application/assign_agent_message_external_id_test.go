@@ -34,7 +34,7 @@ func TestAssignAgentMessageExternalIDExecute(t *testing.T) {
 
 	newConversationWithAgentMessage := func(t *testing.T) *domain.Conversation {
 		t.Helper()
-		message, err := domain.NewMessage(messageID, nil, "hello", domain.Registered, &agentID, nil, createdAt, nil, nil, nil)
+		message, err := domain.NewMessage(messageID, nil, "hello", domain.Registered, &agentID, nil, createdAt, nil, nil, nil, nil, nil, nil)
 		require.NoError(t, err)
 		conversation, err := domain.NewConversation(conversationID, domain.Assigned, map[uuid.UUID]*domain.Message{messageID: message}, 0, &agentID, contactID, createdAt, nil, nil)
 		require.NoError(t, err)

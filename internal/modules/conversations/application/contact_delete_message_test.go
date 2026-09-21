@@ -37,7 +37,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 
 	newConversationWithContactMessage := func(t *testing.T) *domain.Conversation {
 		t.Helper()
-		message, err := domain.NewMessage(messageID, &externalID, "hello", domain.Delivered, nil, &contactID, createdAt, nil, nil, nil)
+		message, err := domain.NewMessage(messageID, &externalID, "hello", domain.Delivered, nil, &contactID, createdAt, nil, nil, nil, nil, nil, nil)
 		require.NoError(t, err)
 		conversation, err := domain.NewConversation(conversationID, domain.Assigned, map[uuid.UUID]*domain.Message{messageID: message}, 1, nil, contactID, createdAt, nil, nil)
 		require.NoError(t, err)
