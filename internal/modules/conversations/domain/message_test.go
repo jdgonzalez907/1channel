@@ -15,41 +15,53 @@ func TestNewMessage(t *testing.T) {
 	agentID := uuid.NewV7()
 	contactID := uuid.NewV7()
 	updatedAt := baseTime.Add(time.Hour)
-	deletedAt := baseTime.Add(2 * time.Hour)
-	readAt := baseTime.Add(3 * time.Hour)
+	sentAt := baseTime.Add(2 * time.Hour)
+	deliveredAt := baseTime.Add(3 * time.Hour)
+	readAt := baseTime.Add(4 * time.Hour)
+	failedAt := baseTime.Add(5 * time.Hour)
+	deletedAt := baseTime.Add(6 * time.Hour)
 
 	tests := []struct {
-		title      string
-		externalID *string
-		text       string
-		status     MessageStatus
-		agentID    *uuid.UUID
-		contactID  *uuid.UUID
-		updatedAt  *time.Time
-		deletedAt  *time.Time
-		readAt     *time.Time
+		title       string
+		externalID  *string
+		text        string
+		status      MessageStatus
+		agentID     *uuid.UUID
+		contactID   *uuid.UUID
+		updatedAt   *time.Time
+		sentAt      *time.Time
+		deliveredAt *time.Time
+		readAt      *time.Time
+		failedAt    *time.Time
+		deletedAt   *time.Time
 	}{
 		{
-			title:      "success - builds message with all fields populated",
-			externalID: &externalID,
-			text:       "hello",
-			status:     Read,
-			agentID:    &agentID,
-			contactID:  &contactID,
-			updatedAt:  &updatedAt,
-			deletedAt:  &deletedAt,
-			readAt:     &readAt,
+			title:       "success - builds message with all fields populated",
+			externalID:  &externalID,
+			text:        "hello",
+			status:      Read,
+			agentID:     &agentID,
+			contactID:   &contactID,
+			updatedAt:   &updatedAt,
+			sentAt:      &sentAt,
+			deliveredAt: &deliveredAt,
+			readAt:      &readAt,
+			failedAt:    &failedAt,
+			deletedAt:   &deletedAt,
 		},
 		{
-			title:      "success - builds message with nil optional fields boundary",
-			externalID: nil,
-			text:       "",
-			status:     Registered,
-			agentID:    nil,
-			contactID:  nil,
-			updatedAt:  nil,
-			deletedAt:  nil,
-			readAt:     nil,
+			title:       "success - builds message with nil optional fields boundary",
+			externalID:  nil,
+			text:        "",
+			status:      Registered,
+			agentID:     nil,
+			contactID:   nil,
+			updatedAt:   nil,
+			sentAt:      nil,
+			deliveredAt: nil,
+			readAt:      nil,
+			failedAt:    nil,
+			deletedAt:   nil,
 		},
 	}
 
@@ -59,7 +71,7 @@ func TestNewMessage(t *testing.T) {
 			// (inputs are in the table)
 
 			// Act
-			message, err := NewMessage(id, tt.externalID, tt.text, tt.status, tt.agentID, tt.contactID, baseTime, tt.updatedAt, tt.deletedAt, tt.readAt)
+			message, err := NewMessage(id, tt.externalID, tt.text, tt.status, tt.agentID, tt.contactID, baseTime, tt.updatedAt, tt.sentAt, tt.deliveredAt, tt.readAt, tt.failedAt, tt.deletedAt)
 
 			// Assert
 			require.NoError(t, err)
@@ -70,10 +82,13 @@ func TestNewMessage(t *testing.T) {
 			assert.Equal(t, tt.status, message.Status())
 			assert.Equal(t, tt.agentID, message.AgentID())
 			assert.Equal(t, tt.contactID, message.ContactID())
-			assert.Equal(t, baseTime, message.CreatedAt())
+			assert.Equal(t, baseTime, message.RegisteredAt())
 			assert.Equal(t, tt.updatedAt, message.UpdatedAt())
-			assert.Equal(t, tt.deletedAt, message.DeletedAt())
+			assert.Equal(t, tt.sentAt, message.SentAt())
+			assert.Equal(t, tt.deliveredAt, message.DeliveredAt())
 			assert.Equal(t, tt.readAt, message.ReadAt())
+			assert.Equal(t, tt.failedAt, message.FailedAt())
+			assert.Equal(t, tt.deletedAt, message.DeletedAt())
 		})
 	}
 }
@@ -90,12 +105,6 @@ func TestMarkAsSent(t *testing.T) {
 		{
 			title:          "success - marks registered message as sent",
 			currentStatus:  Registered,
-			expected:       true,
-			expectedStatus: Sent,
-		},
-		{
-			title:          "success - marks failed message as sent (retry)",
-			currentStatus:  Failed,
 			expected:       true,
 			expectedStatus: Sent,
 		},
@@ -137,6 +146,10 @@ func TestMarkAsSent(t *testing.T) {
 			// Assert
 			assert.Equal(t, tt.expected, changed)
 			assert.Equal(t, tt.expectedStatus, message.Status())
+			if tt.expected {
+				require.NotNil(t, message.SentAt())
+				assert.True(t, at.Equal(*message.SentAt()))
+			}
 		})
 	}
 }
@@ -157,10 +170,10 @@ func TestMarkAsDelivered(t *testing.T) {
 			expectedStatus: Delivered,
 		},
 		{
-			title:          "failure - keeps registered message untouched",
+			title:          "success - marks registered message as delivered (out of order)",
 			currentStatus:  Registered,
-			expected:       false,
-			expectedStatus: Registered,
+			expected:       true,
+			expectedStatus: Delivered,
 		},
 		{
 			title:          "failure - keeps delivered message untouched",
@@ -194,6 +207,10 @@ func TestMarkAsDelivered(t *testing.T) {
 			// Assert
 			assert.Equal(t, tt.expected, changed)
 			assert.Equal(t, tt.expectedStatus, message.Status())
+			if tt.expected {
+				require.NotNil(t, message.DeliveredAt())
+				assert.True(t, at.Equal(*message.DeliveredAt()))
+			}
 		})
 	}
 }
@@ -314,6 +331,10 @@ func TestMarkAsFailed(t *testing.T) {
 			// Assert
 			assert.Equal(t, tt.expected, changed)
 			assert.Equal(t, tt.expectedStatus, message.Status())
+			if tt.expected {
+				require.NotNil(t, message.FailedAt())
+				assert.True(t, at.Equal(*message.FailedAt()))
+			}
 		})
 	}
 }

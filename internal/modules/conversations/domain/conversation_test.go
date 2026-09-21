@@ -26,14 +26,14 @@ func newTestConversation(
 
 func newTestAgentMessage(t *testing.T, agentID uuid.UUID, status MessageStatus) *Message {
 	t.Helper()
-	message, err := NewMessage(uuid.NewV7(), nil, "agent text", status, &agentID, nil, baseTime, nil, nil, nil)
+	message, err := NewMessage(uuid.NewV7(), nil, "agent text", status, &agentID, nil, baseTime, nil, nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 	return message
 }
 
 func newTestContactMessage(t *testing.T, contactID uuid.UUID, status MessageStatus, externalID string) *Message {
 	t.Helper()
-	message, err := NewMessage(uuid.NewV7(), &externalID, "contact text", status, nil, &contactID, baseTime, nil, nil, nil)
+	message, err := NewMessage(uuid.NewV7(), &externalID, "contact text", status, nil, &contactID, baseTime, nil, nil, nil, nil, nil, nil)
 	require.NoError(t, err)
 	return message
 }
@@ -753,9 +753,9 @@ func TestMessages(t *testing.T) {
 	t.Run("returns messages sorted by created at", func(t *testing.T) {
 		conv := newTestConversation(t, Assigned, nil, 0, nil)
 
-		msg1, _ := NewMessage(uuid.NewV7(), nil, "first", Delivered, nil, &contactID, baseTime.Add(-2*time.Hour), nil, nil, nil)
-		msg2, _ := NewMessage(uuid.NewV7(), nil, "third", Delivered, nil, &contactID, baseTime, nil, nil, nil)
-		msg3, _ := NewMessage(uuid.NewV7(), nil, "second", Delivered, nil, &contactID, baseTime.Add(-1*time.Hour), nil, nil, nil)
+		msg1, _ := NewMessage(uuid.NewV7(), nil, "first", Delivered, nil, &contactID, baseTime.Add(-2*time.Hour), nil, nil, nil, nil, nil, nil)
+		msg2, _ := NewMessage(uuid.NewV7(), nil, "third", Delivered, nil, &contactID, baseTime, nil, nil, nil, nil, nil, nil)
+		msg3, _ := NewMessage(uuid.NewV7(), nil, "second", Delivered, nil, &contactID, baseTime.Add(-1*time.Hour), nil, nil, nil, nil, nil, nil)
 
 		conv.messages[msg1.ID()] = msg1
 		conv.messages[msg2.ID()] = msg2
@@ -781,9 +781,9 @@ func TestDirtyMessages(t *testing.T) {
 	t.Run("returns only dirty messages sorted by created at", func(t *testing.T) {
 		conv := newTestConversation(t, Assigned, nil, 0, nil)
 
-		dirty1, _ := NewMessage(uuid.NewV7(), nil, "dirty-first", Delivered, nil, &contactID, baseTime.Add(-1*time.Hour), nil, nil, nil)
-		dirty2, _ := NewMessage(uuid.NewV7(), nil, "dirty-second", Delivered, nil, &contactID, baseTime, nil, nil, nil)
-		clean, _ := NewMessage(uuid.NewV7(), nil, "clean", Delivered, nil, &contactID, baseTime.Add(-2*time.Hour), nil, nil, nil)
+		dirty1, _ := NewMessage(uuid.NewV7(), nil, "dirty-first", Delivered, nil, &contactID, baseTime.Add(-1*time.Hour), nil, nil, nil, nil, nil, nil)
+		dirty2, _ := NewMessage(uuid.NewV7(), nil, "dirty-second", Delivered, nil, &contactID, baseTime, nil, nil, nil, nil, nil, nil)
+		clean, _ := NewMessage(uuid.NewV7(), nil, "clean", Delivered, nil, &contactID, baseTime.Add(-2*time.Hour), nil, nil, nil, nil, nil, nil)
 
 		conv.messages[dirty1.ID()] = dirty1
 		conv.messages[dirty2.ID()] = dirty2
@@ -817,15 +817,6 @@ func TestMarkAgentMessageStatus(t *testing.T) {
 		{
 			title:          "success - marks registered message as sent",
 			currentStatus:  Registered,
-			newStatus:      Sent,
-			messageExists:  true,
-			expectedError:  "",
-			expectedStatus: Sent,
-			expectDirty:    true,
-		},
-		{
-			title:          "success - marks failed message as sent (retry)",
-			currentStatus:  Failed,
 			newStatus:      Sent,
 			messageExists:  true,
 			expectedError:  "",
