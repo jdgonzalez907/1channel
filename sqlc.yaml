@@ -12,7 +12,4 @@ sql:
         emit_empty_slices: true
         overrides:
           - db_type: "uuid"
-            go_type: "uuid.UUID"
-          - db_type: "uuid"
             go_type: "github.com/jackc/pgx/v5/pgtype.UUID"
-            nullable: true

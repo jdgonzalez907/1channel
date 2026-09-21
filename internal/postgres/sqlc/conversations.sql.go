@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"uuid"
 )
 
 const batchUpsertMessages = `-- name: BatchUpsertMessages :exec
@@ -37,14 +36,14 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type BatchUpsertMessagesParams struct {
-	Ids             []uuid.UUID          `json:"ids"`
-	ConversationIds []uuid.UUID          `json:"conversation_ids"`
+	Ids             []pgtype.UUID        `json:"ids"`
+	ConversationIds []pgtype.UUID        `json:"conversation_ids"`
 	ExternalIds     []string             `json:"external_ids"`
 	Texts           []string             `json:"texts"`
 	MessageTypes    []string             `json:"message_types"`
 	Statuses        []string             `json:"statuses"`
-	AgentIds        []uuid.UUID          `json:"agent_ids"`
-	ContactIds      []uuid.UUID          `json:"contact_ids"`
+	AgentIds        []pgtype.UUID        `json:"agent_ids"`
+	ContactIds      []pgtype.UUID        `json:"contact_ids"`
 	CreatedAts      []pgtype.Timestamptz `json:"created_ats"`
 	UpdatedAts      []pgtype.Timestamptz `json:"updated_ats"`
 	DeletedAts      []pgtype.Timestamptz `json:"deleted_ats"`
@@ -84,7 +83,7 @@ type FindConversationByIDRow struct {
 	Message      Message      `json:"message"`
 }
 
-func (q *Queries) FindConversationByID(ctx context.Context, id uuid.UUID) ([]FindConversationByIDRow, error) {
+func (q *Queries) FindConversationByID(ctx context.Context, id pgtype.UUID) ([]FindConversationByIDRow, error) {
 	rows, err := q.db.Query(ctx, findConversationByID, id)
 	if err != nil {
 		return nil, err
@@ -141,7 +140,7 @@ type FindLastOpenConversationByContactIDRow struct {
 	Message      Message      `json:"message"`
 }
 
-func (q *Queries) FindLastOpenConversationByContactID(ctx context.Context, contactID uuid.UUID) ([]FindLastOpenConversationByContactIDRow, error) {
+func (q *Queries) FindLastOpenConversationByContactID(ctx context.Context, contactID pgtype.UUID) ([]FindLastOpenConversationByContactIDRow, error) {
 	rows, err := q.db.Query(ctx, findLastOpenConversationByContactID, contactID)
 	if err != nil {
 		return nil, err
@@ -238,7 +237,7 @@ type FindWithSpecificMessageByMessageIDRow struct {
 	Message      Message      `json:"message"`
 }
 
-func (q *Queries) FindWithSpecificMessageByMessageID(ctx context.Context, messageID uuid.UUID) (FindWithSpecificMessageByMessageIDRow, error) {
+func (q *Queries) FindWithSpecificMessageByMessageID(ctx context.Context, messageID pgtype.UUID) (FindWithSpecificMessageByMessageIDRow, error) {
 	row := q.db.QueryRow(ctx, findWithSpecificMessageByMessageID, messageID)
 	var i FindWithSpecificMessageByMessageIDRow
 	err := row.Scan(
@@ -278,11 +277,11 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertConversationParams struct {
-	ID          uuid.UUID          `json:"id"`
+	ID          pgtype.UUID        `json:"id"`
 	Status      string             `json:"status"`
 	UnreadCount int16              `json:"unread_count"`
 	AgentID     pgtype.UUID        `json:"agent_id"`
-	ContactID   uuid.UUID          `json:"contact_id"`
+	ContactID   pgtype.UUID        `json:"contact_id"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	FinishedAt  pgtype.Timestamptz `json:"finished_at"`

@@ -6,36 +6,35 @@ package sqlc
 
 import (
 	"github.com/jackc/pgx/v5/pgtype"
-	"uuid"
 )
 
 type Agent struct {
-	ID        uuid.UUID          `json:"id"`
+	ID        pgtype.UUID        `json:"id"`
 	Name      string             `json:"name"`
 	Email     string             `json:"email"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Contact struct {
-	ID                uuid.UUID          `json:"id"`
+	ID                pgtype.UUID        `json:"id"`
 	ExternalContactID string             `json:"external_contact_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }
 
 type Conversation struct {
-	ID          uuid.UUID          `json:"id"`
+	ID          pgtype.UUID        `json:"id"`
 	Status      string             `json:"status"`
 	UnreadCount int16              `json:"unread_count"`
 	AgentID     pgtype.UUID        `json:"agent_id"`
-	ContactID   uuid.UUID          `json:"contact_id"`
+	ContactID   pgtype.UUID        `json:"contact_id"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	FinishedAt  pgtype.Timestamptz `json:"finished_at"`
 }
 
 type Message struct {
-	ID             uuid.UUID          `json:"id"`
-	ConversationID uuid.UUID          `json:"conversation_id"`
+	ID             pgtype.UUID        `json:"id"`
+	ConversationID pgtype.UUID        `json:"conversation_id"`
 	ExternalID     pgtype.Text        `json:"external_id"`
 	Text           string             `json:"text"`
 	MessageType    string             `json:"message_type"`

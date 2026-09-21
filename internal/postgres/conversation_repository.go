@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -23,7 +22,7 @@ func NewConversationRepository(pool *pgxpool.Pool) domain.ConversationRepository
 }
 
 func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Conversation, error) {
-	rows, err := r.queries.FindConversationByID(ctx, id)
+	rows, err := r.queries.FindConversationByID(ctx, pgUUIDFromUUID(id))
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +40,7 @@ func (r *conversationRepository) FindByID(ctx context.Context, id uuid.UUID) (*d
 }
 
 func (r *conversationRepository) FindLastOpenByContactID(ctx context.Context, contactID uuid.UUID) (*domain.Conversation, error) {
-	rows, err := r.queries.FindLastOpenConversationByContactID(ctx, contactID)
+	rows, err := r.queries.FindLastOpenConversationByContactID(ctx, pgUUIDFromUUID(contactID))
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +70,7 @@ func (r *conversationRepository) FindWithSpecificMessageByExternalID(ctx context
 }
 
 func (r *conversationRepository) FindWithSpecificMessageByMessageID(ctx context.Context, messageID uuid.UUID) (*domain.Conversation, error) {
-	row, err := r.queries.FindWithSpecificMessageByMessageID(ctx, messageID)
+	row, err := r.queries.FindWithSpecificMessageByMessageID(ctx, pgUUIDFromUUID(messageID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -120,7 +119,7 @@ func toDomain(conv sqlc.Conversation, msgs []sqlc.Message) (*domain.Conversation
 	messages := make(map[uuid.UUID]*domain.Message, len(msgs))
 	for _, row := range msgs {
 		m, err := domain.NewMessage(
-			row.ID,
+			pgUUIDToUUID(row.ID),
 			textPtr(row.ExternalID),
 			row.Text,
 			domain.MessageStatus(row.Status),
@@ -138,12 +137,12 @@ func toDomain(conv sqlc.Conversation, msgs []sqlc.Message) (*domain.Conversation
 	}
 
 	return domain.NewConversation(
-		conv.ID,
+		pgUUIDToUUID(conv.ID),
 		domain.ConversationStatus(conv.Status),
 		messages,
 		int8(conv.UnreadCount),
 		pgUUIDToPtr(conv.AgentID),
-		conv.ContactID,
+		pgUUIDToUUID(conv.ContactID),
 		conv.CreatedAt.Time,
 		timePtr(conv.UpdatedAt),
 		timePtr(conv.FinishedAt),
@@ -152,11 +151,11 @@ func toDomain(conv sqlc.Conversation, msgs []sqlc.Message) (*domain.Conversation
 
 func toUpsertParams(conversation *domain.Conversation) sqlc.UpsertConversationParams {
 	return sqlc.UpsertConversationParams{
-		ID:          conversation.ID(),
+		ID:          pgUUIDFromUUID(conversation.ID()),
 		Status:      string(conversation.Status()),
 		UnreadCount: int16(conversation.UnreadCount()),
 		AgentID:     ptrToPgUUID(conversation.AgentID()),
-		ContactID:   conversation.ContactID(),
+		ContactID:   pgUUIDFromUUID(conversation.ContactID()),
 		CreatedAt:   toTimestamptz(conversation.CreatedAt()),
 		UpdatedAt:   toNillableTimestamptz(conversation.UpdatedAt()),
 		FinishedAt:  toNillableTimestamptz(conversation.FinishedAt()),
@@ -166,14 +165,14 @@ func toUpsertParams(conversation *domain.Conversation) sqlc.UpsertConversationPa
 func toBatchUpsertParams(conversationID uuid.UUID, messages []*domain.Message) sqlc.BatchUpsertMessagesParams {
 	n := len(messages)
 	params := sqlc.BatchUpsertMessagesParams{
-		Ids:             make([]uuid.UUID, n),
-		ConversationIds: make([]uuid.UUID, n),
+		Ids:             make([]pgtype.UUID, n),
+		ConversationIds: make([]pgtype.UUID, n),
 		ExternalIds:     make([]string, n),
 		Texts:           make([]string, n),
 		MessageTypes:    make([]string, n),
 		Statuses:        make([]string, n),
-		AgentIds:        make([]uuid.UUID, n),
-		ContactIds:      make([]uuid.UUID, n),
+		AgentIds:        make([]pgtype.UUID, n),
+		ContactIds:      make([]pgtype.UUID, n),
 		CreatedAts:      make([]pgtype.Timestamptz, n),
 		UpdatedAts:      make([]pgtype.Timestamptz, n),
 		DeletedAts:      make([]pgtype.Timestamptz, n),
@@ -181,16 +180,16 @@ func toBatchUpsertParams(conversationID uuid.UUID, messages []*domain.Message) s
 	}
 
 	for i, m := range messages {
-		params.Ids[i] = m.ID()
-		params.ConversationIds[i] = conversationID
+		params.Ids[i] = pgUUIDFromUUID(m.ID())
+		params.ConversationIds[i] = pgUUIDFromUUID(conversationID)
 		if ext := m.ExternalID(); ext != nil {
 			params.ExternalIds[i] = *ext
 		}
 		params.Texts[i] = m.Text()
 		params.MessageTypes[i] = "text"
 		params.Statuses[i] = string(m.Status())
-		params.AgentIds[i] = nilUUID(m.AgentID())
-		params.ContactIds[i] = nilUUID(m.ContactID())
+		params.AgentIds[i] = ptrToPgUUID(m.AgentID())
+		params.ContactIds[i] = ptrToPgUUID(m.ContactID())
 		params.CreatedAts[i] = toTimestamptz(m.CreatedAt())
 		params.UpdatedAts[i] = toNillableTimestamptz(m.UpdatedAt())
 		params.DeletedAts[i] = toNillableTimestamptz(m.DeletedAt())
@@ -198,51 +197,4 @@ func toBatchUpsertParams(conversationID uuid.UUID, messages []*domain.Message) s
 	}
 
 	return params
-}
-
-func toTimestamptz(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
-}
-
-func toNillableTimestamptz(t *time.Time) pgtype.Timestamptz {
-	if t == nil {
-		return pgtype.Timestamptz{}
-	}
-	return pgtype.Timestamptz{Time: *t, Valid: true}
-}
-
-func timePtr(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	return &t.Time
-}
-
-func textPtr(t pgtype.Text) *string {
-	if !t.Valid {
-		return nil
-	}
-	return &t.String
-}
-
-func pgUUIDToPtr(id pgtype.UUID) *uuid.UUID {
-	if !id.Valid {
-		return nil
-	}
-	u := uuid.UUID(id.Bytes)
-	return &u
-}
-
-func ptrToPgUUID(id *uuid.UUID) pgtype.UUID {
-	if id == nil {
-		return pgtype.UUID{}
-	}
-	return pgtype.UUID{Bytes: *id, Valid: true}
-}
-
-func nilUUID(id *uuid.UUID) uuid.UUID {
-	if id == nil {
-		return uuid.Nil()
-	}
-	return *id
 }

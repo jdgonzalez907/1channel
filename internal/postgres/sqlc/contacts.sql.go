@@ -9,7 +9,6 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	"uuid"
 )
 
 const findContactByExternalID = `-- name: FindContactByExternalID :one
@@ -37,7 +36,7 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertContactParams struct {
-	ID                uuid.UUID          `json:"id"`
+	ID                pgtype.UUID        `json:"id"`
 	ExternalContactID string             `json:"external_contact_id"`
 	CreatedAt         pgtype.Timestamptz `json:"created_at"`
 }

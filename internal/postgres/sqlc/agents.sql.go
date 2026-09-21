@@ -8,7 +8,7 @@ package sqlc
 import (
 	"context"
 
-	"uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const findAgentByID = `-- name: FindAgentByID :one
@@ -21,7 +21,7 @@ type FindAgentByIDRow struct {
 	Agent Agent `json:"agent"`
 }
 
-func (q *Queries) FindAgentByID(ctx context.Context, id uuid.UUID) (FindAgentByIDRow, error) {
+func (q *Queries) FindAgentByID(ctx context.Context, id pgtype.UUID) (FindAgentByIDRow, error) {
 	row := q.db.QueryRow(ctx, findAgentByID, id)
 	var i FindAgentByIDRow
 	err := row.Scan(

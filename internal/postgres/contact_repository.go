@@ -27,12 +27,12 @@ func (r *contactRepository) FindByExternalContactID(ctx context.Context, externa
 		return nil, err
 	}
 
-	return domain.NewContact(row.Contact.ID, row.Contact.ExternalContactID, row.Contact.CreatedAt.Time)
+	return domain.NewContact(pgUUIDToUUID(row.Contact.ID), row.Contact.ExternalContactID, row.Contact.CreatedAt.Time)
 }
 
 func (r *contactRepository) Save(ctx context.Context, contact *domain.Contact) error {
 	return r.queries.UpsertContact(ctx, sqlc.UpsertContactParams{
-		ID:                contact.ID(),
+		ID:                pgUUIDFromUUID(contact.ID()),
 		ExternalContactID: contact.ExternalContactID(),
 		CreatedAt:         toTimestamptz(contact.CreatedAt()),
 	})

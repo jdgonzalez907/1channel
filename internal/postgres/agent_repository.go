@@ -20,7 +20,7 @@ func NewAgentRepository(pool *pgxpool.Pool) domain.AgentRepository {
 }
 
 func (r *agentRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Agent, error) {
-	row, err := r.queries.FindAgentByID(ctx, id)
+	row, err := r.queries.FindAgentByID(ctx, pgUUIDFromUUID(id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
@@ -28,5 +28,5 @@ func (r *agentRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.A
 		return nil, err
 	}
 
-	return domain.NewAgent(row.Agent.ID, row.Agent.CreatedAt.Time)
+	return domain.NewAgent(pgUUIDToUUID(row.Agent.ID), row.Agent.CreatedAt.Time)
 }
