@@ -20,6 +20,7 @@ var (
 	ErrConversationNotFound    = errors.New("conversation not found")
 	ErrMessageAlreadyExists    = errors.New("message already exists")
 	ErrConversationNotAssigned = errors.New("conversation not assigned")
+	ErrInvalidStatusTransition = errors.New("invalid status transition")
 )
 
 type Conversation struct {
@@ -154,7 +155,7 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 
 	hasUpdates := false
 	for _, message := range c.messages {
-		if message.ContactID() != nil && message.Read(at) {
+		if message.ContactID() != nil && message.MarkAsRead(at) {
 			c.dirtyMessages[message.ID()] = message
 			hasUpdates = true
 		}
@@ -178,6 +179,45 @@ func (c *Conversation) AssignAgentMessageExternalID(messageID uuid.UUID, externa
 	}
 
 	return nil
+}
+func (c *Conversation) MarkAgentMessageStatus(messageID uuid.UUID, newStatus MessageStatus, at time.Time) error {
+	message, err := c.findAgentMessageByID(messageID)
+	if err != nil {
+		return err
+	}
+
+	var changed bool
+	switch newStatus {
+	case Sent:
+		changed = message.MarkAsSent(at)
+	case Delivered:
+		changed = message.MarkAsDelivered(at)
+	case Read:
+		changed = message.MarkAsRead(at)
+	case Failed:
+		changed = message.MarkAsFailed(at)
+	default:
+		return ErrInvalidStatusTransition
+	}
+
+	if changed {
+		c.dirtyMessages[messageID] = message
+		c.updateUpdatedAt(at)
+	}
+
+	return nil
+}
+func (c *Conversation) findAgentMessageByID(messageID uuid.UUID) (*Message, error) {
+	message, ok := c.messages[messageID]
+	if !ok {
+		return nil, ErrMessageNotFound
+	}
+
+	if message.AgentID() == nil {
+		return nil, ErrMessageNotFound
+	}
+
+	return message, nil
 }
 func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, externalMessageID string, text string, at time.Time) error {
 	if c.hasExternalID(externalMessageID) {
@@ -240,7 +280,7 @@ func (c *Conversation) ContactDeleteMessage(contactID uuid.UUID, externalMessage
 	}
 
 	wasUnread := message.Status() != Read
-	if message.Delete(at) {
+	if message.MarkAsDeleted(at) {
 		c.dirtyMessages[message.ID()] = message
 
 		if wasUnread {
