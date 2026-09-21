@@ -54,7 +54,8 @@ func main() {
 	contactsAPI := contacts.NewContactsAPI(getOrCreateContact)
 
 	receiveContactMessage := convapp.NewReceiveContactMessage(convRepo, contactsAPI)
-	conversationsAPI := conversations.NewConversationsAPI(receiveContactMessage)
+	updateAgentMessageStatus := convapp.NewUpdateAgentMessageStatus(convRepo)
+	conversationsAPI := conversations.NewConversationsAPI(receiveContactMessage, updateAgentMessageStatus)
 
 	router := httprouter.NewRouter()
 	router.Use(
