@@ -5,7 +5,7 @@ SELECT
 FROM conversations c
 JOIN messages m ON m.conversation_id = c.id
 WHERE c.id = sqlc.arg('id')
-ORDER BY m.created_at;
+ORDER BY m.registered_at;
 
 -- name: FindLastOpenConversationByContactID :many
 SELECT
@@ -15,7 +15,7 @@ FROM conversations c
 JOIN messages m ON m.conversation_id = c.id
 WHERE c.contact_id = sqlc.arg('contact_id')
   AND (c.status NOT IN ('expired', 'resolved') OR c.finished_at > now())
-ORDER BY c.created_at DESC, m.created_at;
+ORDER BY c.created_at DESC, m.registered_at;
 
 -- name: FindWithSpecificMessageByExternalID :one
 SELECT
@@ -44,7 +44,7 @@ ON CONFLICT (id) DO UPDATE SET
     finished_at = EXCLUDED.finished_at;
 
 -- name: BatchUpsertMessages :exec
-INSERT INTO messages (id, conversation_id, external_id, text, message_type, status, agent_id, contact_id, created_at, updated_at, deleted_at, read_at)
+INSERT INTO messages (id, conversation_id, external_id, text, message_type, status, agent_id, contact_id, registered_at, updated_at, sent_at, delivered_at, read_at, failed_at, deleted_at)
 SELECT
     unnest(sqlc.arg('ids')::uuid[]),
     unnest(sqlc.arg('conversation_ids')::uuid[]),
@@ -54,14 +54,20 @@ SELECT
     unnest(sqlc.arg('statuses')::text[]),
     unnest(sqlc.arg('agent_ids')::uuid[]),
     unnest(sqlc.arg('contact_ids')::uuid[]),
-    unnest(sqlc.arg('created_ats')::timestamptz[]),
+    unnest(sqlc.arg('registered_ats')::timestamptz[]),
     unnest(sqlc.arg('updated_ats')::timestamptz[]),
-    unnest(sqlc.arg('deleted_ats')::timestamptz[]),
-    unnest(sqlc.arg('read_ats')::timestamptz[])
+    unnest(sqlc.arg('sent_ats')::timestamptz[]),
+    unnest(sqlc.arg('delivered_ats')::timestamptz[]),
+    unnest(sqlc.arg('read_ats')::timestamptz[]),
+    unnest(sqlc.arg('failed_ats')::timestamptz[]),
+    unnest(sqlc.arg('deleted_ats')::timestamptz[])
 ON CONFLICT (id) DO UPDATE SET
     external_id = EXCLUDED.external_id,
     text = EXCLUDED.text,
     status = EXCLUDED.status,
     updated_at = EXCLUDED.updated_at,
-    deleted_at = EXCLUDED.deleted_at,
-    read_at = EXCLUDED.read_at;
+    sent_at = EXCLUDED.sent_at,
+    delivered_at = EXCLUDED.delivered_at,
+    read_at = EXCLUDED.read_at,
+    failed_at = EXCLUDED.failed_at,
+    deleted_at = EXCLUDED.deleted_at;

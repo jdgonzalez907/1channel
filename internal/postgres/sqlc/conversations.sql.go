@@ -12,7 +12,7 @@ import (
 )
 
 const batchUpsertMessages = `-- name: BatchUpsertMessages :exec
-INSERT INTO messages (id, conversation_id, external_id, text, message_type, status, agent_id, contact_id, created_at, updated_at, deleted_at, read_at)
+INSERT INTO messages (id, conversation_id, external_id, text, message_type, status, agent_id, contact_id, registered_at, updated_at, sent_at, delivered_at, read_at, failed_at, deleted_at)
 SELECT
     unnest($1::uuid[]),
     unnest($2::uuid[]),
@@ -25,14 +25,20 @@ SELECT
     unnest($9::timestamptz[]),
     unnest($10::timestamptz[]),
     unnest($11::timestamptz[]),
-    unnest($12::timestamptz[])
+    unnest($12::timestamptz[]),
+    unnest($13::timestamptz[]),
+    unnest($14::timestamptz[]),
+    unnest($15::timestamptz[])
 ON CONFLICT (id) DO UPDATE SET
     external_id = EXCLUDED.external_id,
     text = EXCLUDED.text,
     status = EXCLUDED.status,
     updated_at = EXCLUDED.updated_at,
-    deleted_at = EXCLUDED.deleted_at,
-    read_at = EXCLUDED.read_at
+    sent_at = EXCLUDED.sent_at,
+    delivered_at = EXCLUDED.delivered_at,
+    read_at = EXCLUDED.read_at,
+    failed_at = EXCLUDED.failed_at,
+    deleted_at = EXCLUDED.deleted_at
 `
 
 type BatchUpsertMessagesParams struct {
@@ -44,10 +50,13 @@ type BatchUpsertMessagesParams struct {
 	Statuses        []string             `json:"statuses"`
 	AgentIds        []pgtype.UUID        `json:"agent_ids"`
 	ContactIds      []pgtype.UUID        `json:"contact_ids"`
-	CreatedAts      []pgtype.Timestamptz `json:"created_ats"`
+	RegisteredAts   []pgtype.Timestamptz `json:"registered_ats"`
 	UpdatedAts      []pgtype.Timestamptz `json:"updated_ats"`
-	DeletedAts      []pgtype.Timestamptz `json:"deleted_ats"`
+	SentAts         []pgtype.Timestamptz `json:"sent_ats"`
+	DeliveredAts    []pgtype.Timestamptz `json:"delivered_ats"`
 	ReadAts         []pgtype.Timestamptz `json:"read_ats"`
+	FailedAts       []pgtype.Timestamptz `json:"failed_ats"`
+	DeletedAts      []pgtype.Timestamptz `json:"deleted_ats"`
 }
 
 func (q *Queries) BatchUpsertMessages(ctx context.Context, arg BatchUpsertMessagesParams) error {
@@ -60,10 +69,13 @@ func (q *Queries) BatchUpsertMessages(ctx context.Context, arg BatchUpsertMessag
 		arg.Statuses,
 		arg.AgentIds,
 		arg.ContactIds,
-		arg.CreatedAts,
+		arg.RegisteredAts,
 		arg.UpdatedAts,
-		arg.DeletedAts,
+		arg.SentAts,
+		arg.DeliveredAts,
 		arg.ReadAts,
+		arg.FailedAts,
+		arg.DeletedAts,
 	)
 	return err
 }
@@ -71,11 +83,11 @@ func (q *Queries) BatchUpsertMessages(ctx context.Context, arg BatchUpsertMessag
 const findConversationByID = `-- name: FindConversationByID :many
 SELECT
     c.id, c.status, c.unread_count, c.agent_id, c.contact_id, c.created_at, c.updated_at, c.finished_at,
-    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.created_at, m.updated_at, m.deleted_at, m.read_at
+    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.registered_at, m.updated_at, m.deleted_at, m.read_at, m.sent_at, m.delivered_at, m.failed_at
 FROM conversations c
 JOIN messages m ON m.conversation_id = c.id
 WHERE c.id = $1
-ORDER BY m.created_at
+ORDER BY m.registered_at
 `
 
 type FindConversationByIDRow struct {
@@ -109,10 +121,13 @@ func (q *Queries) FindConversationByID(ctx context.Context, id pgtype.UUID) ([]F
 			&i.Message.Status,
 			&i.Message.AgentID,
 			&i.Message.ContactID,
-			&i.Message.CreatedAt,
+			&i.Message.RegisteredAt,
 			&i.Message.UpdatedAt,
 			&i.Message.DeletedAt,
 			&i.Message.ReadAt,
+			&i.Message.SentAt,
+			&i.Message.DeliveredAt,
+			&i.Message.FailedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -127,12 +142,12 @@ func (q *Queries) FindConversationByID(ctx context.Context, id pgtype.UUID) ([]F
 const findLastOpenConversationByContactID = `-- name: FindLastOpenConversationByContactID :many
 SELECT
     c.id, c.status, c.unread_count, c.agent_id, c.contact_id, c.created_at, c.updated_at, c.finished_at,
-    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.created_at, m.updated_at, m.deleted_at, m.read_at
+    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.registered_at, m.updated_at, m.deleted_at, m.read_at, m.sent_at, m.delivered_at, m.failed_at
 FROM conversations c
 JOIN messages m ON m.conversation_id = c.id
 WHERE c.contact_id = $1
   AND (c.status NOT IN ('expired', 'resolved') OR c.finished_at > now())
-ORDER BY c.created_at DESC, m.created_at
+ORDER BY c.created_at DESC, m.registered_at
 `
 
 type FindLastOpenConversationByContactIDRow struct {
@@ -166,10 +181,13 @@ func (q *Queries) FindLastOpenConversationByContactID(ctx context.Context, conta
 			&i.Message.Status,
 			&i.Message.AgentID,
 			&i.Message.ContactID,
-			&i.Message.CreatedAt,
+			&i.Message.RegisteredAt,
 			&i.Message.UpdatedAt,
 			&i.Message.DeletedAt,
 			&i.Message.ReadAt,
+			&i.Message.SentAt,
+			&i.Message.DeliveredAt,
+			&i.Message.FailedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -184,7 +202,7 @@ func (q *Queries) FindLastOpenConversationByContactID(ctx context.Context, conta
 const findWithSpecificMessageByExternalID = `-- name: FindWithSpecificMessageByExternalID :one
 SELECT
     c.id, c.status, c.unread_count, c.agent_id, c.contact_id, c.created_at, c.updated_at, c.finished_at,
-    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.created_at, m.updated_at, m.deleted_at, m.read_at
+    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.registered_at, m.updated_at, m.deleted_at, m.read_at, m.sent_at, m.delivered_at, m.failed_at
 FROM messages m
 JOIN conversations c ON c.id = m.conversation_id
 WHERE m.external_id = $1
@@ -215,10 +233,13 @@ func (q *Queries) FindWithSpecificMessageByExternalID(ctx context.Context, exter
 		&i.Message.Status,
 		&i.Message.AgentID,
 		&i.Message.ContactID,
-		&i.Message.CreatedAt,
+		&i.Message.RegisteredAt,
 		&i.Message.UpdatedAt,
 		&i.Message.DeletedAt,
 		&i.Message.ReadAt,
+		&i.Message.SentAt,
+		&i.Message.DeliveredAt,
+		&i.Message.FailedAt,
 	)
 	return i, err
 }
@@ -226,7 +247,7 @@ func (q *Queries) FindWithSpecificMessageByExternalID(ctx context.Context, exter
 const findWithSpecificMessageByMessageID = `-- name: FindWithSpecificMessageByMessageID :one
 SELECT
     c.id, c.status, c.unread_count, c.agent_id, c.contact_id, c.created_at, c.updated_at, c.finished_at,
-    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.created_at, m.updated_at, m.deleted_at, m.read_at
+    m.id, m.conversation_id, m.external_id, m.text, m.message_type, m.status, m.agent_id, m.contact_id, m.registered_at, m.updated_at, m.deleted_at, m.read_at, m.sent_at, m.delivered_at, m.failed_at
 FROM messages m
 JOIN conversations c ON c.id = m.conversation_id
 WHERE m.id = $1
@@ -257,10 +278,13 @@ func (q *Queries) FindWithSpecificMessageByMessageID(ctx context.Context, messag
 		&i.Message.Status,
 		&i.Message.AgentID,
 		&i.Message.ContactID,
-		&i.Message.CreatedAt,
+		&i.Message.RegisteredAt,
 		&i.Message.UpdatedAt,
 		&i.Message.DeletedAt,
 		&i.Message.ReadAt,
+		&i.Message.SentAt,
+		&i.Message.DeliveredAt,
+		&i.Message.FailedAt,
 	)
 	return i, err
 }

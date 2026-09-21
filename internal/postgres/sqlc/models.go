@@ -41,8 +41,11 @@ type Message struct {
 	Status         string             `json:"status"`
 	AgentID        pgtype.UUID        `json:"agent_id"`
 	ContactID      pgtype.UUID        `json:"contact_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	RegisteredAt   pgtype.Timestamptz `json:"registered_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
 	ReadAt         pgtype.Timestamptz `json:"read_at"`
+	SentAt         pgtype.Timestamptz `json:"sent_at"`
+	DeliveredAt    pgtype.Timestamptz `json:"delivered_at"`
+	FailedAt       pgtype.Timestamptz `json:"failed_at"`
 }
