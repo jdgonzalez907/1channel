@@ -78,7 +78,127 @@ func TestNewMessage(t *testing.T) {
 	}
 }
 
-func TestRead(t *testing.T) {
+func TestMarkAsSent(t *testing.T) {
+	at := baseTime.Add(time.Hour)
+
+	tests := []struct {
+		title          string
+		currentStatus  MessageStatus
+		expected       bool
+		expectedStatus MessageStatus
+	}{
+		{
+			title:          "success - marks registered message as sent",
+			currentStatus:  Registered,
+			expected:       true,
+			expectedStatus: Sent,
+		},
+		{
+			title:          "success - marks failed message as sent (retry)",
+			currentStatus:  Failed,
+			expected:       true,
+			expectedStatus: Sent,
+		},
+		{
+			title:          "failure - keeps sent message untouched",
+			currentStatus:  Sent,
+			expected:       false,
+			expectedStatus: Sent,
+		},
+		{
+			title:          "failure - keeps delivered message untouched",
+			currentStatus:  Delivered,
+			expected:       false,
+			expectedStatus: Delivered,
+		},
+		{
+			title:          "failure - keeps read message untouched",
+			currentStatus:  Read,
+			expected:       false,
+			expectedStatus: Read,
+		},
+		{
+			title:          "failure - keeps deleted message untouched",
+			currentStatus:  Deleted,
+			expected:       false,
+			expectedStatus: Deleted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			agentID := uuid.NewV7()
+			message := newTestAgentMessage(t, agentID, tt.currentStatus)
+
+			// Act
+			changed := message.MarkAsSent(at)
+
+			// Assert
+			assert.Equal(t, tt.expected, changed)
+			assert.Equal(t, tt.expectedStatus, message.Status())
+		})
+	}
+}
+
+func TestMarkAsDelivered(t *testing.T) {
+	at := baseTime.Add(time.Hour)
+
+	tests := []struct {
+		title          string
+		currentStatus  MessageStatus
+		expected       bool
+		expectedStatus MessageStatus
+	}{
+		{
+			title:          "success - marks sent message as delivered",
+			currentStatus:  Sent,
+			expected:       true,
+			expectedStatus: Delivered,
+		},
+		{
+			title:          "failure - keeps registered message untouched",
+			currentStatus:  Registered,
+			expected:       false,
+			expectedStatus: Registered,
+		},
+		{
+			title:          "failure - keeps delivered message untouched",
+			currentStatus:  Delivered,
+			expected:       false,
+			expectedStatus: Delivered,
+		},
+		{
+			title:          "failure - keeps read message untouched",
+			currentStatus:  Read,
+			expected:       false,
+			expectedStatus: Read,
+		},
+		{
+			title:          "failure - keeps deleted message untouched",
+			currentStatus:  Deleted,
+			expected:       false,
+			expectedStatus: Deleted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			agentID := uuid.NewV7()
+			message := newTestAgentMessage(t, agentID, tt.currentStatus)
+
+			// Act
+			changed := message.MarkAsDelivered(at)
+
+			// Assert
+			assert.Equal(t, tt.expected, changed)
+			assert.Equal(t, tt.expectedStatus, message.Status())
+		})
+	}
+}
+
+func TestMarkAsRead(t *testing.T) {
 	at := baseTime.Add(time.Hour)
 
 	tests := []struct {
@@ -105,6 +225,12 @@ func TestRead(t *testing.T) {
 			expected:       false,
 			expectedStatus: Deleted,
 		},
+		{
+			title:          "failure - keeps failed message untouched",
+			status:         Failed,
+			expected:       false,
+			expectedStatus: Failed,
+		},
 	}
 
 	for _, tt := range tests {
@@ -114,7 +240,7 @@ func TestRead(t *testing.T) {
 			message := newTestContactMessage(t, contactID, tt.status, "wa-message-1")
 
 			// Act
-			changed := message.Read(at)
+			changed := message.MarkAsRead(at)
 
 			// Assert
 			assert.Equal(t, tt.expected, changed)
@@ -125,6 +251,69 @@ func TestRead(t *testing.T) {
 			} else {
 				assert.Nil(t, message.ReadAt())
 			}
+		})
+	}
+}
+
+func TestMarkAsFailed(t *testing.T) {
+	at := baseTime.Add(time.Hour)
+
+	tests := []struct {
+		title          string
+		currentStatus  MessageStatus
+		expected       bool
+		expectedStatus MessageStatus
+	}{
+		{
+			title:          "success - marks registered message as failed",
+			currentStatus:  Registered,
+			expected:       true,
+			expectedStatus: Failed,
+		},
+		{
+			title:          "success - marks sent message as failed",
+			currentStatus:  Sent,
+			expected:       true,
+			expectedStatus: Failed,
+		},
+		{
+			title:          "success - marks delivered message as failed",
+			currentStatus:  Delivered,
+			expected:       true,
+			expectedStatus: Failed,
+		},
+		{
+			title:          "success - marks read message as failed",
+			currentStatus:  Read,
+			expected:       true,
+			expectedStatus: Failed,
+		},
+		{
+			title:          "failure - keeps failed message untouched",
+			currentStatus:  Failed,
+			expected:       false,
+			expectedStatus: Failed,
+		},
+		{
+			title:          "failure - keeps deleted message untouched",
+			currentStatus:  Deleted,
+			expected:       false,
+			expectedStatus: Deleted,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			agentID := uuid.NewV7()
+			message := newTestAgentMessage(t, agentID, tt.currentStatus)
+
+			// Act
+			changed := message.MarkAsFailed(at)
+
+			// Assert
+			assert.Equal(t, tt.expected, changed)
+			assert.Equal(t, tt.expectedStatus, message.Status())
 		})
 	}
 }
@@ -144,7 +333,7 @@ func TestUpdateText(t *testing.T) {
 	assert.True(t, editedAt.Equal(*message.UpdatedAt()))
 }
 
-func TestDelete(t *testing.T) {
+func TestMarkAsDeleted(t *testing.T) {
 	firstDelete := baseTime.Add(time.Hour)
 	secondDelete := baseTime.Add(2 * time.Hour)
 
@@ -192,7 +381,7 @@ func TestDelete(t *testing.T) {
 			}
 
 			// Act
-			changed := message.Delete(tt.at)
+			changed := message.MarkAsDeleted(tt.at)
 
 			// Assert
 			assert.Equal(t, tt.expected, changed)

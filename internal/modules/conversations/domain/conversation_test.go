@@ -799,3 +799,142 @@ func TestDirtyMessages(t *testing.T) {
 		assert.Equal(t, "dirty-second", result[1].Text())
 	})
 }
+
+func TestMarkAgentMessageStatus(t *testing.T) {
+	agentID := uuid.NewV7()
+	at := baseTime.Add(time.Hour)
+
+	tests := []struct {
+		title          string
+		currentStatus  MessageStatus
+		newStatus      MessageStatus
+		messageExists  bool
+		isContactMsg   bool
+		expectedError  string
+		expectedStatus MessageStatus
+		expectDirty    bool
+	}{
+		{
+			title:          "success - marks registered message as sent",
+			currentStatus:  Registered,
+			newStatus:      Sent,
+			messageExists:  true,
+			expectedError:  "",
+			expectedStatus: Sent,
+			expectDirty:    true,
+		},
+		{
+			title:          "success - marks failed message as sent (retry)",
+			currentStatus:  Failed,
+			newStatus:      Sent,
+			messageExists:  true,
+			expectedError:  "",
+			expectedStatus: Sent,
+			expectDirty:    true,
+		},
+		{
+			title:          "success - marks sent message as delivered",
+			currentStatus:  Sent,
+			newStatus:      Delivered,
+			messageExists:  true,
+			expectedError:  "",
+			expectedStatus: Delivered,
+			expectDirty:    true,
+		},
+		{
+			title:          "success - marks delivered message as read",
+			currentStatus:  Delivered,
+			newStatus:      Read,
+			messageExists:  true,
+			expectedError:  "",
+			expectedStatus: Read,
+			expectDirty:    true,
+		},
+		{
+			title:          "success - marks registered message as failed",
+			currentStatus:  Registered,
+			newStatus:      Failed,
+			messageExists:  true,
+			expectedError:  "",
+			expectedStatus: Failed,
+			expectDirty:    true,
+		},
+		{
+			title:          "success - no change for same status",
+			currentStatus:  Sent,
+			newStatus:      Sent,
+			messageExists:  true,
+			expectedError:  "",
+			expectedStatus: Sent,
+			expectDirty:    false,
+		},
+		{
+			title:          "failure - unknown message id",
+			currentStatus:  Registered,
+			newStatus:      Sent,
+			messageExists:  false,
+			expectedError:  ErrMessageNotFound.Error(),
+			expectedStatus: Registered,
+			expectDirty:    false,
+		},
+		{
+			title:          "failure - contact message rejected",
+			currentStatus:  Registered,
+			newStatus:      Sent,
+			messageExists:  true,
+			isContactMsg:   true,
+			expectedError:  ErrMessageNotFound.Error(),
+			expectedStatus: Registered,
+			expectDirty:    false,
+		},
+		{
+			title:          "failure - unsupported status",
+			currentStatus:  Registered,
+			newStatus:      Deleted,
+			messageExists:  true,
+			expectedError:  ErrInvalidStatusTransition.Error(),
+			expectedStatus: Registered,
+			expectDirty:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			// Arrange
+			conversation := newTestConversation(t, Assigned, &agentID, 0, nil)
+			var message *Message
+			if tt.isContactMsg {
+				message = newTestContactMessage(t, conversation.contactID, tt.currentStatus, "wa-ext-1")
+			} else {
+				message = newTestAgentMessage(t, agentID, tt.currentStatus)
+			}
+			if tt.messageExists {
+				conversation.messages[message.ID()] = message
+			}
+
+			// Act
+			err := conversation.MarkAgentMessageStatus(message.ID(), tt.newStatus, at)
+
+			// Assert
+			assertMarkAgentMessageResult(t, tt.expectedError, tt.expectedStatus, tt.expectDirty, err, message, conversation, at)
+		})
+	}
+}
+
+func assertMarkAgentMessageResult(t *testing.T, expectedError string, expectedStatus MessageStatus, expectDirty bool, err error, message *Message, conversation *Conversation, at time.Time) {
+	t.Helper()
+	if expectedError != "" {
+		require.Error(t, err)
+		assert.Equal(t, expectedError, err.Error())
+		return
+	}
+	require.NoError(t, err)
+	assert.Equal(t, expectedStatus, message.Status())
+	if expectDirty {
+		assert.Same(t, conversation.dirtyMessages[message.ID()], message)
+		require.NotNil(t, conversation.UpdatedAt())
+		assert.True(t, at.Equal(*conversation.UpdatedAt()))
+	} else {
+		assert.NotContains(t, conversation.dirtyMessages, message.ID())
+	}
+}
