@@ -125,10 +125,13 @@ func toDomain(conv sqlc.Conversation, msgs []sqlc.Message) (*domain.Conversation
 			domain.MessageStatus(row.Status),
 			pgUUIDToPtr(row.AgentID),
 			pgUUIDToPtr(row.ContactID),
-			row.CreatedAt.Time,
+			row.RegisteredAt.Time,
 			timePtr(row.UpdatedAt),
-			timePtr(row.DeletedAt),
+			timePtr(row.SentAt),
+			timePtr(row.DeliveredAt),
 			timePtr(row.ReadAt),
+			timePtr(row.FailedAt),
+			timePtr(row.DeletedAt),
 		)
 		if err != nil {
 			return nil, err
@@ -173,10 +176,13 @@ func toBatchUpsertParams(conversationID uuid.UUID, messages []*domain.Message) s
 		Statuses:        make([]string, n),
 		AgentIds:        make([]pgtype.UUID, n),
 		ContactIds:      make([]pgtype.UUID, n),
-		CreatedAts:      make([]pgtype.Timestamptz, n),
+		RegisteredAts:   make([]pgtype.Timestamptz, n),
 		UpdatedAts:      make([]pgtype.Timestamptz, n),
-		DeletedAts:      make([]pgtype.Timestamptz, n),
+		SentAts:         make([]pgtype.Timestamptz, n),
+		DeliveredAts:    make([]pgtype.Timestamptz, n),
 		ReadAts:         make([]pgtype.Timestamptz, n),
+		FailedAts:       make([]pgtype.Timestamptz, n),
+		DeletedAts:      make([]pgtype.Timestamptz, n),
 	}
 
 	for i, m := range messages {
@@ -190,10 +196,13 @@ func toBatchUpsertParams(conversationID uuid.UUID, messages []*domain.Message) s
 		params.Statuses[i] = string(m.Status())
 		params.AgentIds[i] = ptrToPgUUID(m.AgentID())
 		params.ContactIds[i] = ptrToPgUUID(m.ContactID())
-		params.CreatedAts[i] = toTimestamptz(m.CreatedAt())
+		params.RegisteredAts[i] = toTimestamptz(m.RegisteredAt())
 		params.UpdatedAts[i] = toNillableTimestamptz(m.UpdatedAt())
-		params.DeletedAts[i] = toNillableTimestamptz(m.DeletedAt())
+		params.SentAts[i] = toNillableTimestamptz(m.SentAt())
+		params.DeliveredAts[i] = toNillableTimestamptz(m.DeliveredAt())
 		params.ReadAts[i] = toNillableTimestamptz(m.ReadAt())
+		params.FailedAts[i] = toNillableTimestamptz(m.FailedAt())
+		params.DeletedAts[i] = toNillableTimestamptz(m.DeletedAt())
 	}
 
 	return params
