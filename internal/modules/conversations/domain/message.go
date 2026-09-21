@@ -54,10 +54,44 @@ func (m *Message) CreatedAt() time.Time  { return m.createdAt }
 func (m *Message) UpdatedAt() *time.Time { return m.updatedAt }
 func (m *Message) DeletedAt() *time.Time { return m.deletedAt }
 func (m *Message) ReadAt() *time.Time    { return m.readAt }
-func (m *Message) Read(at time.Time) bool {
-	next := MessageStatusRank[Deleted]
-	current := MessageStatusRank[m.status]
-	if current >= next {
+
+func (m *Message) UpdateText(text string, at time.Time) {
+	m.text = text
+	m.updatedAt = &at
+}
+
+func (m *Message) AssignExternalID(externalID string) bool {
+	if m.externalID != nil {
+		return false
+	}
+
+	m.externalID = &externalID
+
+	return true
+}
+
+func (m *Message) MarkAsSent(at time.Time) bool {
+	if m.status != Registered && m.status != Failed {
+		return false
+	}
+
+	m.status = Sent
+
+	return true
+}
+
+func (m *Message) MarkAsDelivered(at time.Time) bool {
+	if m.status != Sent {
+		return false
+	}
+
+	m.status = Delivered
+
+	return true
+}
+
+func (m *Message) MarkAsRead(at time.Time) bool {
+	if m.status == Deleted || m.status == Failed || m.status == Read {
 		return false
 	}
 
@@ -66,28 +100,24 @@ func (m *Message) Read(at time.Time) bool {
 
 	return true
 }
-func (m *Message) UpdateText(text string, at time.Time) {
-	m.text = text
-	m.updatedAt = &at
+
+func (m *Message) MarkAsFailed(at time.Time) bool {
+	if m.status == Deleted || m.status == Failed {
+		return false
+	}
+
+	m.status = Failed
+
+	return true
 }
-func (m *Message) Delete(at time.Time) bool {
-	next := MessageStatusRank[Deleted]
-	current := MessageStatusRank[m.status]
-	if current >= next {
+
+func (m *Message) MarkAsDeleted(at time.Time) bool {
+	if m.status == Deleted || m.status == Failed {
 		return false
 	}
 
 	m.status = Deleted
 	m.deletedAt = &at
-
-	return true
-}
-func (m *Message) AssignExternalID(externalID string) bool {
-	if m.externalID != nil {
-		return false
-	}
-
-	m.externalID = &externalID
 
 	return true
 }
