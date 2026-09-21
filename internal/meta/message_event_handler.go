@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"uuid"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations"
@@ -32,6 +33,7 @@ type change struct {
 
 type value struct {
 	Messages []message `json:"messages"`
+	Statuses []status  `json:"statuses"`
 }
 
 type message struct {
@@ -45,6 +47,21 @@ type message struct {
 
 type textBody struct {
 	Body string `json:"body"`
+}
+
+type status struct {
+	ID                    string        `json:"id"`
+	Status                string        `json:"status"`
+	Timestamp             string        `json:"timestamp"`
+	RecipientID           string        `json:"recipient_id"`
+	BizOpaqueCallbackData string        `json:"biz_opaque_callback_data"`
+	Errors                []statusError `json:"errors"`
+}
+
+type statusError struct {
+	Code    int    `json:"code"`
+	Title   string `json:"title"`
+	Message string `json:"message"`
 }
 
 type MessageEventHandler struct {
@@ -98,6 +115,14 @@ func (h *MessageEventHandler) Handle(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			}
+
+			for _, s := range c.Value.Statuses {
+				if err := h.processStatus(r.Context(), s); err != nil {
+					slog.Error("failed to process status", "error", err, "status_id", s.ID)
+					http.Error(w, "Internal server error", http.StatusInternalServerError)
+					return
+				}
+			}
 		}
 	}
 
@@ -115,5 +140,29 @@ func (h *MessageEventHandler) processMessage(ctx context.Context, msg message) e
 		ExternalContactID: msg.FromUserID,
 		Text:              msg.Text.Body,
 		ReceivedAt:        time.Unix(timestamp, 0).UTC(),
+	})
+}
+
+func (h *MessageEventHandler) processStatus(ctx context.Context, s status) error {
+	if s.BizOpaqueCallbackData == "" {
+		slog.Info("skipping status without biz_opaque_callback_data", "id", s.ID)
+		return nil
+	}
+
+	messageID, err := uuid.Parse(s.BizOpaqueCallbackData)
+	if err != nil {
+		slog.Error("invalid biz_opaque_callback_data", "error", err, "value", s.BizOpaqueCallbackData)
+		return nil
+	}
+
+	timestamp, err := strconv.ParseInt(s.Timestamp, 10, 64)
+	if err != nil {
+		return err
+	}
+
+	return h.conversationsAPI.UpdateAgentMessageStatus(ctx, conversations.UpdateAgentMessageStatusInput{
+		MessageID: messageID,
+		Status:    s.Status,
+		Timestamp: time.Unix(timestamp, 0).UTC(),
 	})
 }
