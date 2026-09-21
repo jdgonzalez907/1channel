@@ -3,6 +3,7 @@ package domain
 type MessageStatus string
 
 const (
+	Failed     MessageStatus = "failed"
 	Registered MessageStatus = "registered"
 	Sent       MessageStatus = "sent"
 	Delivered  MessageStatus = "delivered"
@@ -16,7 +17,8 @@ var (
 		Sent:       2,
 		Delivered:  3,
 		Read:       4,
-		Deleted:    5,
+		Failed:     5,
+		Deleted:    6,
 	}
 )
 
