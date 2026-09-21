@@ -18,3 +18,8 @@ func (m *MockConversationsAPI) ReceiveContactMessage(ctx context.Context, input 
 	args := m.Called(ctx, input)
 	return args.Error(0)
 }
+
+func (m *MockConversationsAPI) UpdateAgentMessageStatus(ctx context.Context, input UpdateAgentMessageStatusInput) error {
+	args := m.Called(ctx, input)
+	return args.Error(0)
+}
