@@ -47,7 +47,7 @@ type textBody struct {
 }
 
 type MessageEventHandler struct {
-	cfg             config.Configuration
+	cfg              config.Configuration
 	conversationsAPI conversations.ConversationsAPI
 }
 
