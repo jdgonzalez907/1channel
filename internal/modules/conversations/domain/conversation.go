@@ -73,16 +73,16 @@ func (c *Conversation) ContactID() uuid.UUID       { return c.contactID }
 func (c *Conversation) CreatedAt() time.Time       { return c.createdAt }
 func (c *Conversation) UpdatedAt() *time.Time      { return c.updatedAt }
 func (c *Conversation) FinishedAt() *time.Time     { return c.finishedAt }
-func (c *Conversation) Messages() []*Message       { return sortedByCreatedAt(c.messages) }
-func (c *Conversation) DirtyMessages() []*Message  { return sortedByCreatedAt(c.dirtyMessages) }
-func sortedByCreatedAt(messages map[uuid.UUID]*Message) []*Message {
+func (c *Conversation) Messages() []*Message       { return sortedByRegisteredAt(c.messages) }
+func (c *Conversation) DirtyMessages() []*Message  { return sortedByRegisteredAt(c.dirtyMessages) }
+func sortedByRegisteredAt(messages map[uuid.UUID]*Message) []*Message {
 	sorted := make([]*Message, 0, len(messages))
 	for _, message := range messages {
 		sorted = append(sorted, message)
 	}
 
 	slices.SortFunc(sorted, func(a, b *Message) int {
-		return a.createdAt.Compare(b.createdAt)
+		return a.registeredAt.Compare(b.registeredAt)
 	})
 
 	return sorted
@@ -132,7 +132,7 @@ func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text strin
 		return ErrUnauthorizedAgent
 	}
 
-	message, err := NewMessage(messageID, nil, text, Registered, &agentID, nil, at, nil, nil, nil)
+	message, err := NewMessage(messageID, nil, text, Registered, &agentID, nil, at, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, ext
 		return ErrConversationClosed
 	}
 
-	message, err := NewMessage(messageID, &externalMessageID, text, Delivered, nil, &contactID, at, nil, nil, nil)
+	message, err := NewMessage(messageID, &externalMessageID, text, Delivered, nil, &contactID, at, nil, nil, nil, nil, nil, nil)
 	if err != nil {
 		return err
 	}
