@@ -35,11 +35,12 @@ type value struct {
 }
 
 type message struct {
-	ID        string    `json:"id"`
-	From      string    `json:"from"`
-	Timestamp string    `json:"timestamp"`
-	Type      string    `json:"type"`
-	Text      *textBody `json:"text"`
+	ID         string    `json:"id"`
+	From       string    `json:"from"`
+	FromUserID string    `json:"from_user_id"`
+	Timestamp  string    `json:"timestamp"`
+	Type       string    `json:"type"`
+	Text       *textBody `json:"text"`
 }
 
 type textBody struct {
@@ -111,7 +112,7 @@ func (h *MessageEventHandler) processMessage(ctx context.Context, msg message) e
 
 	return h.conversationsAPI.ReceiveContactMessage(ctx, conversations.ReceiveContactMessageInput{
 		ExternalMessageID: msg.ID,
-		ExternalContactID: msg.From,
+		ExternalContactID: msg.FromUserID,
 		Text:              msg.Text.Body,
 		ReceivedAt:        time.Unix(timestamp, 0).UTC(),
 	})

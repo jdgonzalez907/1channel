@@ -124,8 +124,8 @@ func toDomain(conv sqlc.Conversation, msgs []sqlc.Message) (*domain.Conversation
 			textPtr(row.ExternalID),
 			row.Text,
 			domain.MessageStatus(row.Status),
-			uuidPtr(row.AgentID),
-			uuidPtr(row.ContactID),
+			pgUUIDToPtr(row.AgentID),
+			pgUUIDToPtr(row.ContactID),
 			row.CreatedAt.Time,
 			timePtr(row.UpdatedAt),
 			timePtr(row.DeletedAt),
@@ -142,7 +142,7 @@ func toDomain(conv sqlc.Conversation, msgs []sqlc.Message) (*domain.Conversation
 		domain.ConversationStatus(conv.Status),
 		messages,
 		int8(conv.UnreadCount),
-		uuidPtr(conv.AgentID),
+		pgUUIDToPtr(conv.AgentID),
 		conv.ContactID,
 		conv.CreatedAt.Time,
 		timePtr(conv.UpdatedAt),
@@ -155,7 +155,7 @@ func toUpsertParams(conversation *domain.Conversation) sqlc.UpsertConversationPa
 		ID:          conversation.ID(),
 		Status:      string(conversation.Status()),
 		UnreadCount: int16(conversation.UnreadCount()),
-		AgentID:     nilUUID(conversation.AgentID()),
+		AgentID:     ptrToPgUUID(conversation.AgentID()),
 		ContactID:   conversation.ContactID(),
 		CreatedAt:   toTimestamptz(conversation.CreatedAt()),
 		UpdatedAt:   toNillableTimestamptz(conversation.UpdatedAt()),
@@ -189,12 +189,8 @@ func toBatchUpsertParams(conversationID uuid.UUID, messages []*domain.Message) s
 		params.Texts[i] = m.Text()
 		params.MessageTypes[i] = "text"
 		params.Statuses[i] = string(m.Status())
-		if agentID := m.AgentID(); agentID != nil {
-			params.AgentIds[i] = *agentID
-		}
-		if contactID := m.ContactID(); contactID != nil {
-			params.ContactIds[i] = *contactID
-		}
+		params.AgentIds[i] = nilUUID(m.AgentID())
+		params.ContactIds[i] = nilUUID(m.ContactID())
 		params.CreatedAts[i] = toTimestamptz(m.CreatedAt())
 		params.UpdatedAts[i] = toNillableTimestamptz(m.UpdatedAt())
 		params.DeletedAts[i] = toNillableTimestamptz(m.DeletedAt())
@@ -229,11 +225,19 @@ func textPtr(t pgtype.Text) *string {
 	return &t.String
 }
 
-func uuidPtr(id uuid.UUID) *uuid.UUID {
-	if id == uuid.Nil() {
+func pgUUIDToPtr(id pgtype.UUID) *uuid.UUID {
+	if !id.Valid {
 		return nil
 	}
-	return &id
+	u := uuid.UUID(id.Bytes)
+	return &u
+}
+
+func ptrToPgUUID(id *uuid.UUID) pgtype.UUID {
+	if id == nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: *id, Valid: true}
 }
 
 func nilUUID(id *uuid.UUID) uuid.UUID {

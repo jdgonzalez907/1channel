@@ -91,11 +91,12 @@ func TestMessageEventHandlerProcessTextMessage(t *testing.T) {
 	textBody := buildWebhookBody(t, webhookPayload{
 		Entry: []entry{{Changes: []change{{Value: value{
 			Messages: []message{{
-				ID:        "wamid.abc123",
-				From:      "5491112345678",
-				Timestamp: "1694000000",
-				Type:      "text",
-				Text:      &textBody{Body: "hola"},
+				ID:         "wamid.abc123",
+				From:       "5491112345678",
+				FromUserID: "US.123456",
+				Timestamp:  "1694000000",
+				Type:       "text",
+				Text:       &textBody{Body: "hola"},
 			}},
 		}}}}},
 	})
@@ -106,7 +107,7 @@ func TestMessageEventHandlerProcessTextMessage(t *testing.T) {
 		mockAPI := conversations.NewMockConversationsAPI()
 		mockAPI.On("ReceiveContactMessage", mock.Anything, mock.MatchedBy(func(input conversations.ReceiveContactMessageInput) bool {
 			return input.ExternalMessageID == "wamid.abc123" &&
-				input.ExternalContactID == "5491112345678" &&
+				input.ExternalContactID == "US.123456" &&
 				input.Text == "hola" &&
 				input.ReceivedAt.Unix() == 1694000000
 		})).Return(nil).Once()
@@ -146,10 +147,11 @@ func TestMessageEventHandlerSkipsNonTextMessages(t *testing.T) {
 	imageBody := buildWebhookBody(t, webhookPayload{
 		Entry: []entry{{Changes: []change{{Value: value{
 			Messages: []message{{
-				ID:        "wamid.img456",
-				From:      "5491112345678",
-				Timestamp: "1694000000",
-				Type:      "image",
+				ID:         "wamid.img456",
+				From:       "5491112345678",
+				FromUserID: "US.123456",
+				Timestamp:  "1694000000",
+				Type:       "image",
 			}},
 		}}}}},
 	})
@@ -175,8 +177,8 @@ func TestMessageEventHandlerProcessesMultipleMessages(t *testing.T) {
 	multiBody := buildWebhookBody(t, webhookPayload{
 		Entry: []entry{{Changes: []change{{Value: value{
 			Messages: []message{
-				{ID: "wamid.1", From: "5491111111111", Timestamp: "1694000000", Type: "text", Text: &textBody{Body: "msg1"}},
-				{ID: "wamid.2", From: "5492222222222", Timestamp: "1694000001", Type: "text", Text: &textBody{Body: "msg2"}},
+				{ID: "wamid.1", From: "5491111111111", FromUserID: "US.111", Timestamp: "1694000000", Type: "text", Text: &textBody{Body: "msg1"}},
+				{ID: "wamid.2", From: "5492222222222", FromUserID: "US.222", Timestamp: "1694000001", Type: "text", Text: &textBody{Body: "msg2"}},
 			},
 		}}}}},
 	})
@@ -208,8 +210,8 @@ func TestMessageEventHandlerStopsOnFirstError(t *testing.T) {
 	multiBody := buildWebhookBody(t, webhookPayload{
 		Entry: []entry{{Changes: []change{{Value: value{
 			Messages: []message{
-				{ID: "wamid.1", From: "5491111111111", Timestamp: "1694000000", Type: "text", Text: &textBody{Body: "msg1"}},
-				{ID: "wamid.2", From: "5492222222222", Timestamp: "1694000001", Type: "text", Text: &textBody{Body: "msg2"}},
+				{ID: "wamid.1", From: "5491111111111", FromUserID: "US.111", Timestamp: "1694000000", Type: "text", Text: &textBody{Body: "msg1"}},
+				{ID: "wamid.2", From: "5492222222222", FromUserID: "US.222", Timestamp: "1694000001", Type: "text", Text: &textBody{Body: "msg2"}},
 			},
 		}}}}},
 	})

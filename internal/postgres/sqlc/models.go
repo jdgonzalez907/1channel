@@ -26,7 +26,7 @@ type Conversation struct {
 	ID          uuid.UUID          `json:"id"`
 	Status      string             `json:"status"`
 	UnreadCount int16              `json:"unread_count"`
-	AgentID     uuid.UUID          `json:"agent_id"`
+	AgentID     pgtype.UUID        `json:"agent_id"`
 	ContactID   uuid.UUID          `json:"contact_id"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -40,8 +40,8 @@ type Message struct {
 	Text           string             `json:"text"`
 	MessageType    string             `json:"message_type"`
 	Status         string             `json:"status"`
-	AgentID        uuid.UUID          `json:"agent_id"`
-	ContactID      uuid.UUID          `json:"contact_id"`
+	AgentID        pgtype.UUID        `json:"agent_id"`
+	ContactID      pgtype.UUID        `json:"contact_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
