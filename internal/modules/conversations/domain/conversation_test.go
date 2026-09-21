@@ -741,3 +741,61 @@ func TestContactDeleteMessage(t *testing.T) {
 		})
 	}
 }
+
+func TestMessages(t *testing.T) {
+	contactID := uuid.NewV7()
+
+	t.Run("returns empty slice when no messages", func(t *testing.T) {
+		conv := newTestConversation(t, Pending, nil, 0, nil)
+		assert.Empty(t, conv.Messages())
+	})
+
+	t.Run("returns messages sorted by created at", func(t *testing.T) {
+		conv := newTestConversation(t, Assigned, nil, 0, nil)
+
+		msg1, _ := NewMessage(uuid.NewV7(), nil, "first", Delivered, nil, &contactID, baseTime.Add(-2*time.Hour), nil, nil, nil)
+		msg2, _ := NewMessage(uuid.NewV7(), nil, "third", Delivered, nil, &contactID, baseTime, nil, nil, nil)
+		msg3, _ := NewMessage(uuid.NewV7(), nil, "second", Delivered, nil, &contactID, baseTime.Add(-1*time.Hour), nil, nil, nil)
+
+		conv.messages[msg1.ID()] = msg1
+		conv.messages[msg2.ID()] = msg2
+		conv.messages[msg3.ID()] = msg3
+
+		result := conv.Messages()
+
+		require.Len(t, result, 3)
+		assert.Equal(t, "first", result[0].Text())
+		assert.Equal(t, "second", result[1].Text())
+		assert.Equal(t, "third", result[2].Text())
+	})
+}
+
+func TestDirtyMessages(t *testing.T) {
+	contactID := uuid.NewV7()
+
+	t.Run("returns empty slice when no dirty messages", func(t *testing.T) {
+		conv := newTestConversation(t, Pending, nil, 0, nil)
+		assert.Empty(t, conv.DirtyMessages())
+	})
+
+	t.Run("returns only dirty messages sorted by created at", func(t *testing.T) {
+		conv := newTestConversation(t, Assigned, nil, 0, nil)
+
+		dirty1, _ := NewMessage(uuid.NewV7(), nil, "dirty-first", Delivered, nil, &contactID, baseTime.Add(-1*time.Hour), nil, nil, nil)
+		dirty2, _ := NewMessage(uuid.NewV7(), nil, "dirty-second", Delivered, nil, &contactID, baseTime, nil, nil, nil)
+		clean, _ := NewMessage(uuid.NewV7(), nil, "clean", Delivered, nil, &contactID, baseTime.Add(-2*time.Hour), nil, nil, nil)
+
+		conv.messages[dirty1.ID()] = dirty1
+		conv.messages[dirty2.ID()] = dirty2
+		conv.messages[clean.ID()] = clean
+
+		conv.dirtyMessages[dirty1.ID()] = dirty1
+		conv.dirtyMessages[dirty2.ID()] = dirty2
+
+		result := conv.DirtyMessages()
+
+		require.Len(t, result, 2)
+		assert.Equal(t, "dirty-first", result[0].Text())
+		assert.Equal(t, "dirty-second", result[1].Text())
+	})
+}

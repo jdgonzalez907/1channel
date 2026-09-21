@@ -16,6 +16,11 @@ import (
 
 	"github.com/jdgonzalez907/1channel/internal/config"
 	"github.com/jdgonzalez907/1channel/internal/meta"
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
+	contactsapp "github.com/jdgonzalez907/1channel/internal/modules/contacts/application"
+	"github.com/jdgonzalez907/1channel/internal/modules/conversations"
+	convapp "github.com/jdgonzalez907/1channel/internal/modules/conversations/application"
+	"github.com/jdgonzalez907/1channel/internal/postgres"
 )
 
 const (
@@ -35,13 +40,29 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	pool, err := postgres.NewPool(ctx, cfg)
+	if err != nil {
+		slog.Error("failed to connect to postgres", "error", err)
+		os.Exit(1)
+	}
+	defer pool.Close()
+
+	contactRepo := postgres.NewContactRepository(pool)
+	convRepo := postgres.NewConversationRepository(pool)
+
+	getOrCreateContact := contactsapp.NewGetOrCreateContactByExternalID(contactRepo)
+	contactsAPI := contacts.NewContactsAPI(getOrCreateContact)
+
+	receiveContactMessage := convapp.NewReceiveContactMessage(convRepo, contactsAPI)
+	conversationsAPI := conversations.NewConversationsAPI(receiveContactMessage)
+
 	router := httprouter.NewRouter()
 	router.Use(
 		middleware.Recovery(),
 		middleware.Logging(),
 		middleware.Timeout(requestTimeout),
 	)
-	meta.RegisterRoutes(router, cfg)
+	meta.RegisterRoutes(router, cfg, conversationsAPI)
 
 	server := &http.Server{
 		Addr:    ":" + cfg.HTTPPort(),

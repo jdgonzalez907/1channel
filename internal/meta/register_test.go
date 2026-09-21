@@ -8,6 +8,7 @@ import (
 
 	"github.com/jdgonzalez907/1channel/internal/config"
 	httprouter "github.com/jdgonzalez907/1channel/internal/http"
+	"github.com/jdgonzalez907/1channel/internal/modules/conversations"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -56,7 +57,8 @@ func TestRegisterRoutes(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			// Arrange
 			router := httprouter.NewRouter()
-			RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, verifyToken))
+			mockAPI := conversations.NewMockConversationsAPI()
+			RegisterRoutes(router, config.NewMockSecretsConfiguration(secret, verifyToken), mockAPI)
 			recorder := httptest.NewRecorder()
 			request := httptest.NewRequest(tt.method, tt.target, bytes.NewReader(validBody))
 
