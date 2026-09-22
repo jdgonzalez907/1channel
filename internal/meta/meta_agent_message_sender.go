@@ -8,18 +8,25 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/jdgonzalez907/1channel/internal/config"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
 const (
-	whatsappAPIVersion = "v26.0"
+	whatsappAPIVersion = "v25.0"
 	whatsappBaseURL    = "https://graph.facebook.com"
 	messagingProduct   = "whatsapp"
 	recipientType      = "individual"
 	messageType        = "text"
 	contentType        = "application/json"
+
+	clientTimeout              = 30 * time.Second
+	clientMaxIdleConns         = 10
+	clientMaxIdleConnsPerHost  = 5
+	clientIdleConnTimeout      = 5 * time.Minute
+	clientTLSHandshakeTimeout = 10 * time.Second
 )
 
 type metaAgentMessageSender struct {
@@ -31,7 +38,15 @@ type metaAgentMessageSender struct {
 
 func NewMetaAgentMessageSender(cfg config.Configuration) domain.MessageSender {
 	return &metaAgentMessageSender{
-		client:        &http.Client{},
+		client: &http.Client{
+			Timeout: clientTimeout,
+			Transport: &http.Transport{
+				MaxIdleConns:         clientMaxIdleConns,
+				MaxIdleConnsPerHost:  clientMaxIdleConnsPerHost,
+				IdleConnTimeout:      clientIdleConnTimeout,
+				TLSHandshakeTimeout: clientTLSHandshakeTimeout,
+			},
+		},
 		baseURL:       whatsappBaseURL,
 		phoneNumberID: cfg.WhatsAppPhoneNumberID(),
 		accessToken:   cfg.WhatsAppAccessToken(),
