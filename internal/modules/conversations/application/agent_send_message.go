@@ -7,6 +7,7 @@ import (
 	"uuid"
 
 	"github.com/jdgonzalez907/1channel/internal/modules/agents"
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
@@ -26,11 +27,18 @@ type (
 	agentSendMessage struct {
 		conversationRepository domain.ConversationRepository
 		agentsAPI              agents.AgentsAPI
+		contactsAPI            contacts.ContactsAPI
+		messageSender          domain.MessageSender
 	}
 )
 
-func NewAgentSendMessage(conversationRepository domain.ConversationRepository, agentsAPI agents.AgentsAPI) AgentSendMessage {
-	return &agentSendMessage{conversationRepository, agentsAPI}
+func NewAgentSendMessage(
+	conversationRepository domain.ConversationRepository,
+	agentsAPI agents.AgentsAPI,
+	contactsAPI contacts.ContactsAPI,
+	messageSender domain.MessageSender,
+) AgentSendMessage {
+	return &agentSendMessage{conversationRepository, agentsAPI, contactsAPI, messageSender}
 }
 
 func (uc *agentSendMessage) Execute(ctx context.Context, input AgentSendMessageInput) error {
@@ -48,12 +56,32 @@ func (uc *agentSendMessage) Execute(ctx context.Context, input AgentSendMessageI
 		return uc.wrapError(domain.ErrConversationNotFound)
 	}
 
-	err = conversation.AgentSendMessage(
+	message, err := conversation.AgentSendMessage(
 		input.MessageID,
 		agentID,
 		input.Text,
 		input.SentAt,
 	)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
+	err = uc.conversationRepository.Save(ctx, conversation)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
+	externalContactID, err := uc.contactsAPI.FindExternalContactIDByContactID(ctx, conversation.ContactID())
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
+	externalMessageID, err := uc.messageSender.Send(ctx, externalContactID, message)
+	if err != nil {
+		return uc.wrapError(err)
+	}
+
+	err = conversation.AssignAgentMessageExternalID(input.MessageID, externalMessageID)
 	if err != nil {
 		return uc.wrapError(err)
 	}

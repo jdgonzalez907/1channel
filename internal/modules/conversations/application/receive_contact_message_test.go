@@ -68,7 +68,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "success - receives message into existing open conversation",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversation(t, domain.Pending, 0, nil, nil)
 				m.On("FindLastOpenByContactID", mock.Anything, contactID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, mock.MatchedBy(func(saved *domain.Conversation) bool {
@@ -82,7 +82,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "success - opens a new conversation when contact has none open",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindLastOpenByContactID", mock.Anything, contactID).Return(nil, nil).Once()
 				m.On("Save", mock.Anything, mock.MatchedBy(func(saved *domain.Conversation) bool {
 					return saved != nil && saved.ID() == conversationID && saved.Status() == domain.Pending && saved.UnreadCount() == 1
@@ -95,7 +95,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "success - silently ignores an already received external id",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				message := newKnownMessage(t)
 				conversation := newConversation(t, domain.Pending, 0, nil, map[uuid.UUID]*domain.Message{message.ID(): message})
 				m.On("FindLastOpenByContactID", mock.Anything, contactID).Return(conversation, nil).Once()
@@ -107,7 +107,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "failure - wraps contacts API error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
 			},
 			input:         input,
 			expectedError: "error receiving contact message\ncontacts service unavailable",
@@ -116,7 +116,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "failure - wraps repository find error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindLastOpenByContactID", mock.Anything, contactID).Return(nil, errors.New("db connection lost")).Once()
 			},
 			input:         input,
@@ -126,7 +126,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "failure - wraps closed conversation error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				finished := createdAt.Add(-time.Hour)
 				conversation := newConversation(t, domain.Expired, 0, &finished, nil)
 				m.On("FindLastOpenByContactID", mock.Anything, contactID).Return(conversation, nil).Once()
@@ -138,7 +138,7 @@ func TestReceiveContactMessageExecute(t *testing.T) {
 			title: "failure - wraps repository save error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversation(t, domain.Pending, 0, nil, nil)
 				m.On("FindLastOpenByContactID", mock.Anything, contactID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, conversation).Return(errors.New("save failed")).Once()

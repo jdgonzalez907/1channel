@@ -62,7 +62,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			title: "success - updates contact message text and persists conversation",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, mock.MatchedBy(func(saved *domain.Conversation) bool {
@@ -76,7 +76,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			title: "failure - wraps contacts API error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
 			},
 			input:         input,
 			expectedError: "error contact updating text message\ncontacts service unavailable",
@@ -85,7 +85,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			title: "failure - wraps repository find error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(nil, errors.New("db connection lost")).Once()
 			},
 			input:         input,
@@ -95,7 +95,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			title: "failure - aborts when conversation does not exist",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(nil, nil).Once()
 			},
 			input:         input,
@@ -105,7 +105,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			title: "failure - wraps unauthorized contact error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(otherContactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(otherContactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 			},
@@ -116,7 +116,7 @@ func TestContactUpdateTextMessageExecute(t *testing.T) {
 			title: "failure - wraps repository save error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, conversation).Return(errors.New("save failed")).Once()
