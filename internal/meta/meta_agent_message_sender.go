@@ -22,10 +22,10 @@ const (
 	messageType        = "text"
 	contentType        = "application/json"
 
-	clientTimeout              = 30 * time.Second
-	clientMaxIdleConns         = 10
-	clientMaxIdleConnsPerHost  = 5
-	clientIdleConnTimeout      = 5 * time.Minute
+	clientTimeout             = 30 * time.Second
+	clientMaxIdleConns        = 10
+	clientMaxIdleConnsPerHost = 5
+	clientIdleConnTimeout     = 5 * time.Minute
 	clientTLSHandshakeTimeout = 10 * time.Second
 )
 
@@ -41,9 +41,9 @@ func NewMetaAgentMessageSender(cfg config.Configuration) domain.MessageSender {
 		client: &http.Client{
 			Timeout: clientTimeout,
 			Transport: &http.Transport{
-				MaxIdleConns:         clientMaxIdleConns,
-				MaxIdleConnsPerHost:  clientMaxIdleConnsPerHost,
-				IdleConnTimeout:      clientIdleConnTimeout,
+				MaxIdleConns:        clientMaxIdleConns,
+				MaxIdleConnsPerHost: clientMaxIdleConnsPerHost,
+				IdleConnTimeout:     clientIdleConnTimeout,
 				TLSHandshakeTimeout: clientTLSHandshakeTimeout,
 			},
 		},
