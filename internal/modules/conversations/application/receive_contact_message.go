@@ -35,7 +35,7 @@ func NewReceiveContactMessage(conversationRepository domain.ConversationReposito
 }
 
 func (uc *receiveContactMessage) Execute(ctx context.Context, input ReceiveContactMessageInput) error {
-	contactID, err := uc.contactsAPI.GetOrCreateContactByExternalID(ctx, input.ExternalContactID)
+	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID)
 	if err != nil {
 		return uc.wrapError(err)
 	}
@@ -52,7 +52,7 @@ func (uc *receiveContactMessage) Execute(ctx context.Context, input ReceiveConta
 		}
 	}
 
-	err = conversation.ReceiveContactMessage(input.MessageID, contactID, input.ExternalMessageID, input.Text, input.ReceivedAt)
+	_, err = conversation.ReceiveContactMessage(input.MessageID, contactID, input.ExternalMessageID, input.Text, input.ReceivedAt)
 	if err != nil {
 		if errors.Is(err, domain.ErrMessageAlreadyExists) {
 			return nil

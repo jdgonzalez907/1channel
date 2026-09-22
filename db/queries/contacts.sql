@@ -3,6 +3,11 @@ SELECT sqlc.embed(c)
 FROM contacts c
 WHERE c.external_contact_id = $1;
 
+-- name: FindContactByID :one
+SELECT sqlc.embed(c)
+FROM contacts c
+WHERE c.id = $1;
+
 -- name: UpsertContact :exec
 INSERT INTO contacts (id, external_contact_id, created_at)
 VALUES ($1, $2, $3)

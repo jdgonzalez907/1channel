@@ -60,7 +60,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 			title: "success - deletes contact message and persists conversation",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, mock.MatchedBy(func(saved *domain.Conversation) bool {
@@ -74,7 +74,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 			title: "failure - wraps contacts API error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), errors.New("contacts service unavailable")).Once()
 			},
 			input:         input,
 			expectedError: "error contact deleting text message\ncontacts service unavailable",
@@ -83,7 +83,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 			title: "failure - wraps repository find error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(nil, errors.New("db connection lost")).Once()
 			},
 			input:         input,
@@ -93,7 +93,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 			title: "failure - aborts when conversation does not exist",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(nil, nil).Once()
 			},
 			input:         input,
@@ -103,7 +103,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 			title: "failure - wraps unknown message error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation, err := domain.NewConversation(conversationID, domain.Assigned, nil, 0, nil, contactID, createdAt, nil, nil)
 				require.NoError(t, err)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
@@ -115,7 +115,7 @@ func TestContactDeleteMessageExecute(t *testing.T) {
 			title: "failure - wraps repository save error",
 			setup: func(t *testing.T, m *domain.MockConversationRepository, c *contacts.MockContactsAPI) {
 				t.Helper()
-				c.On("GetOrCreateContactByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				c.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
 				conversation := newConversationWithContactMessage(t)
 				m.On("FindWithSpecificMessageByExternalID", mock.Anything, externalID).Return(conversation, nil).Once()
 				m.On("Save", mock.Anything, conversation).Return(errors.New("save failed")).Once()

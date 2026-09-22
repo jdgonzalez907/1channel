@@ -232,7 +232,7 @@ func TestAgentSendMessage(t *testing.T) {
 			conversation := newTestConversation(t, tt.convStatus, tt.convAgentID, 0, tt.finishedAt)
 
 			// Act
-			err := conversation.AgentSendMessage(messageID, tt.senderID, "hello", sentAt)
+			_, err := conversation.AgentSendMessage(messageID, tt.senderID, "hello", sentAt)
 
 			// Assert
 			if tt.expectedError != "" {
@@ -502,7 +502,7 @@ func TestReceiveContactMessage(t *testing.T) {
 			}
 
 			// Act
-			err := conversation.ReceiveContactMessage(messageID, senderContactID, externalID, "hello contact", receivedAt)
+			_, err := conversation.ReceiveContactMessage(messageID, senderContactID, externalID, "hello contact", receivedAt)
 
 			// Assert
 			if tt.expectedError != "" {

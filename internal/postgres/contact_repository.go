@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jdgonzalez907/1channel/internal/modules/contacts/domain"
 	"github.com/jdgonzalez907/1channel/internal/postgres/sqlc"
+	"uuid"
 )
 
 type contactRepository struct {
@@ -16,6 +17,18 @@ type contactRepository struct {
 
 func NewContactRepository(pool *pgxpool.Pool) domain.ContactRepository {
 	return &contactRepository{sqlc.New(pool)}
+}
+
+func (r *contactRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.Contact, error) {
+	row, err := r.queries.FindContactByID(ctx, pgUUIDFromUUID(id))
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return domain.NewContact(pgUUIDToUUID(row.Contact.ID), row.Contact.ExternalContactID, row.Contact.CreatedAt.Time)
 }
 
 func (r *contactRepository) FindByExternalContactID(ctx context.Context, externalContactID string) (*domain.Contact, error) {

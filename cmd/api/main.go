@@ -51,7 +51,8 @@ func main() {
 	convRepo := postgres.NewConversationRepository(pool)
 
 	getOrCreateContact := contactsapp.NewGetOrCreateContactByExternalID(contactRepo)
-	contactsAPI := contacts.NewContactsAPI(getOrCreateContact)
+	findContactByID := contactsapp.NewFindContactByID(contactRepo)
+	contactsAPI := contacts.NewContactsAPI(getOrCreateContact, findContactByID)
 
 	receiveContactMessage := convapp.NewReceiveContactMessage(convRepo, contactsAPI)
 	conversationsAPI := conversations.NewConversationsAPI(receiveContactMessage)

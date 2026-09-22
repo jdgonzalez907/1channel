@@ -17,6 +17,9 @@ type Configuration interface {
 	OneChannelSecret() string
 	MetaSecret() string
 
+	WhatsAppPhoneNumberID() string
+	WhatsAppAccessToken() string
+
 	PostgresHost() string
 	PostgresPort() uint16
 	PostgresDatabase() string
@@ -35,6 +38,9 @@ type configuration struct {
 
 	OneChannelSecretEnv string `env:"ONECHANNEL_SECRET,required,notEmpty"`
 	MetaSecretEnv       string `env:"META_SECRET,required,notEmpty"`
+
+	WhatsAppPhoneNumberIDEnv string `env:"WHATSAPP_PHONE_NUMBER_ID,required,notEmpty"`
+	WhatsAppAccessTokenEnv   string `env:"WHATSAPP_ACCESS_TOKEN,required,notEmpty"`
 
 	PostgresHostEnv            string        `env:"POSTGRES_HOST,required,notEmpty"`
 	PostgresPortEnv            uint16        `env:"POSTGRES_PORT" envDefault:"5432"`
@@ -64,6 +70,8 @@ func (c *configuration) HTTPPort() string                       { return c.HTTPP
 func (c *configuration) LogLevel() string                       { return c.LogLevelEnv }
 func (c *configuration) OneChannelSecret() string               { return c.OneChannelSecretEnv }
 func (c *configuration) MetaSecret() string                     { return c.MetaSecretEnv }
+func (c *configuration) WhatsAppPhoneNumberID() string          { return c.WhatsAppPhoneNumberIDEnv }
+func (c *configuration) WhatsAppAccessToken() string            { return c.WhatsAppAccessTokenEnv }
 func (c *configuration) PostgresHost() string                   { return c.PostgresHostEnv }
 func (c *configuration) PostgresPort() uint16                   { return c.PostgresPortEnv }
 func (c *configuration) PostgresDatabase() string               { return c.PostgresDatabaseEnv }
