@@ -17,16 +17,17 @@ import (
 
 func TestNewContactsAPI(t *testing.T) {
 	// Arrange
-	useCase := &application.MockGetOrCreateContactByExternalID{}
+	getOrCreateContact := &application.MockGetOrCreateContactByExternalID{}
+	findContactByID := &application.MockFindContactByID{}
 
 	// Act
-	api := NewContactsAPI(useCase)
+	api := NewContactsAPI(getOrCreateContact, findContactByID)
 
 	// Assert
 	require.NotNil(t, api)
 }
 
-func TestContactsAPIGetOrCreateContactByExternalID(t *testing.T) {
+func TestContactsAPIGetOrCreateContactIDByExternalID(t *testing.T) {
 	contactID := uuid.NewV7()
 	externalContactID := "wa-contact-1"
 	createdAt := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -69,10 +70,11 @@ func TestContactsAPIGetOrCreateContactByExternalID(t *testing.T) {
 		t.Run(tt.title, func(t *testing.T) {
 			// Arrange
 			m := &application.MockGetOrCreateContactByExternalID{}
+			f := &application.MockFindContactByID{}
 			tt.setup(t, m)
 
 			// Act
-			got, err := NewContactsAPI(m).GetOrCreateContactByExternalID(context.Background(), tt.externalContactID)
+			got, err := NewContactsAPI(m, f).GetOrCreateContactIDByExternalID(context.Background(), tt.externalContactID)
 
 			// Assert
 			if tt.expectedError != "" {

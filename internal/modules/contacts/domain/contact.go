@@ -8,6 +8,7 @@ import (
 
 var (
 	ErrExternalContactIDEmpty = errors.New("external contact id is empty")
+	ErrContactNotFound        = errors.New("contact not found")
 )
 
 type Contact struct {

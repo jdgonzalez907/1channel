@@ -28,6 +28,23 @@ func (q *Queries) FindContactByExternalID(ctx context.Context, externalContactID
 	return i, err
 }
 
+const findContactByID = `-- name: FindContactByID :one
+SELECT c.id, c.external_contact_id, c.created_at
+FROM contacts c
+WHERE c.id = $1
+`
+
+type FindContactByIDRow struct {
+	Contact Contact `json:"contact"`
+}
+
+func (q *Queries) FindContactByID(ctx context.Context, id pgtype.UUID) (FindContactByIDRow, error) {
+	row := q.db.QueryRow(ctx, findContactByID, id)
+	var i FindContactByIDRow
+	err := row.Scan(&i.Contact.ID, &i.Contact.ExternalContactID, &i.Contact.CreatedAt)
+	return i, err
+}
+
 const upsertContact = `-- name: UpsertContact :exec
 INSERT INTO contacts (id, external_contact_id, created_at)
 VALUES ($1, $2, $3)
