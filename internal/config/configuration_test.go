@@ -12,6 +12,8 @@ func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("ONECHANNEL_SECRET", "oc-secret")
 	t.Setenv("META_SECRET", "meta-secret")
+	t.Setenv("WHATSAPP_PHONE_NUMBER_ID", "123456")
+	t.Setenv("WHATSAPP_ACCESS_TOKEN", "test-token")
 	t.Setenv("POSTGRES_HOST", "localhost")
 	t.Setenv("POSTGRES_DATABASE", "1channel_dev")
 	t.Setenv("POSTGRES_USERNAME", "dev")
