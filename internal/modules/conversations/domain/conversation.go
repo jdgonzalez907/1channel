@@ -116,9 +116,9 @@ func (c *Conversation) IsClosed(at time.Time) bool {
 	return (c.status == Expired || c.status == Resolved) &&
 		c.finishedAt != nil && c.finishedAt.Before(at)
 }
-func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text string, at time.Time) error {
+func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text string, at time.Time) (*Message, error) {
 	if c.IsClosed(at) {
-		return ErrConversationClosed
+		return nil, ErrConversationClosed
 	}
 
 	if c.agentID == nil {
@@ -128,12 +128,12 @@ func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text strin
 	}
 
 	if *c.agentID != agentID {
-		return ErrUnauthorizedAgent
+		return nil, ErrUnauthorizedAgent
 	}
 
 	message, err := NewMessage(messageID, nil, text, Registered, &agentID, nil, at, nil, nil, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c.messages[messageID] = message
@@ -141,7 +141,7 @@ func (c *Conversation) AgentSendMessage(messageID, agentID uuid.UUID, text strin
 
 	c.updateUpdatedAt(at)
 
-	return nil
+	return message, nil
 }
 func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) error {
 	if c.agentID == nil {
@@ -179,22 +179,22 @@ func (c *Conversation) AssignAgentMessageExternalID(messageID uuid.UUID, externa
 
 	return nil
 }
-func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, externalMessageID string, text string, at time.Time) error {
+func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, externalMessageID string, text string, at time.Time) (*Message, error) {
 	if c.hasExternalID(externalMessageID) {
-		return ErrMessageAlreadyExists
+		return nil, ErrMessageAlreadyExists
 	}
 
 	if c.contactID != contactID {
-		return ErrUnauthorizedContact
+		return nil, ErrUnauthorizedContact
 	}
 
 	if c.IsClosed(at) {
-		return ErrConversationClosed
+		return nil, ErrConversationClosed
 	}
 
 	message, err := NewMessage(messageID, &externalMessageID, text, Delivered, nil, &contactID, at, nil, nil, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c.messages[messageID] = message
@@ -202,7 +202,7 @@ func (c *Conversation) ReceiveContactMessage(messageID, contactID uuid.UUID, ext
 
 	c.addUnread(at)
 
-	return nil
+	return message, nil
 }
 func (c *Conversation) ContactUpdateTextMessage(contactID uuid.UUID, externalMessageID, text string, at time.Time) error {
 	if c.IsClosed(at) {
