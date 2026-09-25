@@ -74,11 +74,13 @@ func TestNewMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg, err := NewMessage(tt.id, tt.status, tt.msgType, tt.text, tt.agentID, tt.contactID, tt.sentAt, nil, nil, nil)
+
 			if tt.wantErr != nil {
 				assert.ErrorIs(t, err, tt.wantErr)
 				assert.Nil(t, msg)
 				return
 			}
+
 			assert.NoError(t, err)
 			assert.NotNil(t, msg)
 		})

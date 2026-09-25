@@ -50,14 +50,18 @@ func NewMessage(
 	if id == uuid.Nil() {
 		return nil, ErrMessageInvalidID
 	}
+
 	if msgType == MessageTypeText {
 		if text == nil {
 			return nil, ErrMessageEmptyText
 		}
+
 		length := uniseg.GraphemeClusterCount(*text)
+
 		if length < MinTextLength {
 			return nil, ErrMessageEmptyText
 		}
+
 		if length > MaxTextLength {
 			return nil, ErrMessageTextTooLong
 		}
@@ -92,9 +96,11 @@ func (m *Message) AssignExternalID(id string) error {
 	if m.externalID != nil {
 		return ErrMessageExternalIDAlreadySet
 	}
+
 	if id == "" {
 		return ErrMessageExternalIDInvalid
 	}
+
 	m.externalID = &id
 	return nil
 }

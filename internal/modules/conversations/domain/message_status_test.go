@@ -23,10 +23,12 @@ func TestNewMessageStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewMessageStatus(tt.input)
+
 			if tt.wantErr {
 				assert.ErrorIs(t, err, ErrMessageStatusInvalid)
 				return
 			}
+
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})

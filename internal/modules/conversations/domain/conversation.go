@@ -14,13 +14,16 @@ var (
 	ErrConversationHasNoContact           = errors.New("cannot receive message: conversation has no contact")
 	ErrConversationContactNotOwner        = errors.New("cannot receive message: contact does not belong to this conversation")
 	ErrConversationDuplicateMessage       = errors.New("cannot receive message: message already exists in conversation")
+	ErrConversationNotAcceptingMessages   = errors.New("conversation is not accepting messages at this time")
+	ErrConversationFinishedAtMissing      = errors.New("conversation is finished but has no finishedAt timestamp")
+	ErrConversationAgentNotOwner          = errors.New("cannot send message: agent does not belong to this conversation")
 )
 
 type Conversation struct {
 	id             uuid.UUID
 	status         ConversationStatus
-	found          map[uuid.UUID]Message
-	dirty          map[uuid.UUID]Message
+	found          map[uuid.UUID]*Message
+	dirty          map[uuid.UUID]*Message
 	externalMsgIdx map[string]uuid.UUID
 	agentID        *uuid.UUID
 	contactID      *uuid.UUID
@@ -32,7 +35,7 @@ type Conversation struct {
 func NewConversation(
 	id uuid.UUID,
 	status ConversationStatus,
-	messages []Message,
+	messages []*Message,
 	agentID *uuid.UUID,
 	contactID *uuid.UUID,
 	createdAt time.Time,
@@ -42,14 +45,20 @@ func NewConversation(
 	if id == uuid.Nil() {
 		return nil, ErrConversationInvalidID
 	}
+
 	if agentID == nil && contactID == nil {
 		return nil, ErrConversationMissingContactAndAgent
 	}
+
 	if len(messages) == 0 {
 		return nil, ErrConversationEmptyMessages
 	}
 
-	found := make(map[uuid.UUID]Message, len(messages))
+	if (status == ConversationStatusExpired || status == ConversationStatusResolved) && finishedAt == nil {
+		return nil, ErrConversationFinishedAtMissing
+	}
+
+	found := make(map[uuid.UUID]*Message, len(messages))
 	externalIdx := make(map[string]uuid.UUID, len(messages))
 	for _, msg := range messages {
 		found[msg.ID()] = msg
@@ -62,7 +71,7 @@ func NewConversation(
 		id:             id,
 		status:         status,
 		found:          found,
-		dirty:          make(map[uuid.UUID]Message),
+		dirty:          make(map[uuid.UUID]*Message),
 		externalMsgIdx: externalIdx,
 		agentID:        agentID,
 		contactID:      contactID,
@@ -80,18 +89,35 @@ func (c *Conversation) CreatedAt() time.Time       { return c.createdAt }
 func (c *Conversation) UpdatedAt() *time.Time      { return c.updatedAt }
 func (c *Conversation) FinishedAt() *time.Time     { return c.finishedAt }
 
-func (c *Conversation) Messages() []Message {
-	msgs := make([]Message, 0, len(c.found))
+func (c *Conversation) Messages() []*Message {
+	msgs := make([]*Message, 0, len(c.found))
 	for _, msg := range c.found {
 		msgs = append(msgs, msg)
 	}
 	return msgs
 }
 
-func (c *Conversation) ReceiveContactMessage(contactID uuid.UUID, msg Message, at time.Time) error {
+func (c *Conversation) ensureAcceptsMessages(at time.Time) error {
+	if c.status != ConversationStatusExpired && c.status != ConversationStatusResolved {
+		return nil
+	}
+
+	if at.Before(*c.finishedAt) {
+		return nil
+	}
+
+	return ErrConversationNotAcceptingMessages
+}
+
+func (c *Conversation) ReceiveContactMessage(contactID uuid.UUID, msg *Message, at time.Time) error {
+	if err := c.ensureAcceptsMessages(at); err != nil {
+		return err
+	}
+
 	if c.contactID == nil {
 		return ErrConversationHasNoContact
 	}
+
 	if contactID != *c.contactID {
 		return ErrConversationContactNotOwner
 	}
@@ -100,6 +126,30 @@ func (c *Conversation) ReceiveContactMessage(contactID uuid.UUID, msg Message, a
 		if _, exists := c.externalMsgIdx[*ext]; exists {
 			return ErrConversationDuplicateMessage
 		}
+		c.externalMsgIdx[*ext] = msg.ID()
+	}
+
+	c.found[msg.ID()] = msg
+	c.dirty[msg.ID()] = msg
+	c.updatedAt = &at
+	return nil
+}
+
+func (c *Conversation) SendAgentMessage(agentID uuid.UUID, msg *Message, at time.Time) error {
+	if err := c.ensureAcceptsMessages(at); err != nil {
+		return err
+	}
+
+	if c.agentID == nil {
+		c.agentID = &agentID
+		c.status = ConversationStatusAssigned
+	}
+
+	if *c.agentID != agentID {
+		return ErrConversationAgentNotOwner
+	}
+
+	if ext := msg.ExternalID(); ext != nil {
 		c.externalMsgIdx[*ext] = msg.ID()
 	}
 

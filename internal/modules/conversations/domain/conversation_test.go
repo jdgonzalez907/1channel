@@ -9,19 +9,20 @@ import (
 )
 
 func TestNewConversation(t *testing.T) {
+	// Arrange
 	validID := uuid.NewV7()
 	agentID := uuid.NewV7()
 	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
 	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
-	messages := []Message{*msg}
+	messages := []*Message{msg}
 
 	tests := []struct {
 		name      string
 		id        uuid.UUID
 		status    ConversationStatus
-		messages  []Message
+		messages  []*Message
 		agentID   *uuid.UUID
 		contactID *uuid.UUID
 		createdAt time.Time
@@ -76,7 +77,7 @@ func TestNewConversation(t *testing.T) {
 			name:      "empty messages",
 			id:        validID,
 			status:    ConversationStatusPending,
-			messages:  []Message{},
+			messages:  []*Message{},
 			contactID: &contactID,
 			createdAt: now,
 			wantErr:   ErrConversationEmptyMessages,
@@ -89,6 +90,24 @@ func TestNewConversation(t *testing.T) {
 			contactID: &contactID,
 			createdAt: now,
 			wantErr:   ErrConversationEmptyMessages,
+		},
+		{
+			name:      "expired without finishedAt",
+			id:        validID,
+			status:    ConversationStatusExpired,
+			messages:  messages,
+			contactID: &contactID,
+			createdAt: now,
+			wantErr:   ErrConversationFinishedAtMissing,
+		},
+		{
+			name:      "resolved without finishedAt",
+			id:        validID,
+			status:    ConversationStatusResolved,
+			messages:  messages,
+			contactID: &contactID,
+			createdAt: now,
+			wantErr:   ErrConversationFinishedAtMissing,
 		},
 	}
 
@@ -119,7 +138,7 @@ func TestConversation_Getters(t *testing.T) {
 	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
 
 	// Act
-	conv, err := NewConversation(id, ConversationStatusAssigned, []Message{*msg}, &agentID, &contactID, now, nil, nil)
+	conv, err := NewConversation(id, ConversationStatusAssigned, []*Message{msg}, &agentID, &contactID, now, nil, nil)
 
 	// Assert
 	assert.NoError(t, err)
@@ -143,123 +162,316 @@ func TestConversation_Messages(t *testing.T) {
 	msg2, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
 
 	// Act
-	conv, err := NewConversation(convID, ConversationStatusAssigned, []Message{*msg1, *msg2}, &agentID, nil, now, nil, nil)
+	conv, err := NewConversation(convID, ConversationStatusAssigned, []*Message{msg1, msg2}, &agentID, nil, now, nil, nil)
 
 	// Assert
 	assert.NoError(t, err)
 	assert.Len(t, conv.Messages(), 2)
 }
 
-func TestConversation_ReceiveContactMessage_Success(t *testing.T) {
-	// Arrange
-	contactID := uuid.NewV7()
-	now := time.Now()
-	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []Message{*existingMsg}, nil, &contactID, now, nil, nil)
-
-	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	newMsg.AssignExternalID("wa-002")
-
-	// Act
-	err := conv.ReceiveContactMessage(contactID, *newMsg, now)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Len(t, conv.Messages(), 2)
-}
-
-func TestConversation_ReceiveContactMessage_ContactNotOwner(t *testing.T) {
+func TestConversation_ReceiveContactMessage(t *testing.T) {
 	// Arrange
 	contactID := uuid.NewV7()
 	otherContact := uuid.NewV7()
-	now := time.Now()
-	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []Message{*existingMsg}, nil, &contactID, now, nil, nil)
-
-	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &otherContact, now, nil, nil, nil)
-
-	// Act
-	err := conv.ReceiveContactMessage(otherContact, *newMsg, now)
-
-	// Assert
-	assert.ErrorIs(t, err, ErrConversationContactNotOwner)
-	assert.Len(t, conv.Messages(), 1)
-}
-
-func TestConversation_ReceiveContactMessage_ConversationHasNoContact(t *testing.T) {
-	// Arrange
 	agentID := uuid.NewV7()
-	contactID := uuid.NewV7()
-	now := time.Now()
-	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
-	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []Message{*existingMsg}, &agentID, nil, now, nil, nil)
-
-	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-
-	// Act
-	err := conv.ReceiveContactMessage(contactID, *newMsg, now)
-
-	// Assert
-	assert.ErrorIs(t, err, ErrConversationHasNoContact)
-}
-
-func TestConversation_ReceiveContactMessage_DuplicateMessage(t *testing.T) {
-	// Arrange
-	contactID := uuid.NewV7()
-	now := time.Now()
-	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	existingMsg.AssignExternalID("wa-001")
-	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []Message{*existingMsg}, nil, &contactID, now, nil, nil)
-
-	dupMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	dupMsg.AssignExternalID("wa-001")
-
-	// Act
-	err := conv.ReceiveContactMessage(contactID, *dupMsg, now)
-
-	// Assert
-	assert.ErrorIs(t, err, ErrConversationDuplicateMessage)
-	assert.Len(t, conv.Messages(), 1)
-}
-
-func TestConversation_ReceiveContactMessage_WithoutExternalID(t *testing.T) {
-	// Arrange
-	contactID := uuid.NewV7()
-	now := time.Now()
-	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []Message{*existingMsg}, nil, &contactID, now, nil, nil)
-
-	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-
-	// Act
-	err := conv.ReceiveContactMessage(contactID, *newMsg, now)
-
-	// Assert
-	assert.NoError(t, err)
-	assert.Len(t, conv.Messages(), 2)
-}
-
-func TestConversation_ReceiveContactMessage_UpdatesTimestamp(t *testing.T) {
-	// Arrange
-	contactID := uuid.NewV7()
 	now := time.Now()
 	later := now.Add(time.Hour)
+	finishedAt := now.Add(-time.Hour)
+	lateFinishedAt := later
 	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []Message{*existingMsg}, nil, &contactID, now, nil, nil)
 
-	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	newMsg.AssignExternalID("wa-002")
+	tests := []struct {
+		name        string
+		convStatus  ConversationStatus
+		agentID     *uuid.UUID
+		contactID   *uuid.UUID
+		finishedAt  *time.Time
+		newMsgFunc  func() *Message
+		receiveFrom uuid.UUID
+		receiveAt   time.Time
+		wantErr     error
+		wantLen     int
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusPending,
+			contactID:  &contactID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg.AssignExternalID("wa-002")
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     nil,
+			wantLen:     2,
+		},
+		{
+			name:       "contact not owner",
+			convStatus: ConversationStatusPending,
+			contactID:  &contactID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &otherContact, now, nil, nil, nil)
+				return msg
+			},
+			receiveFrom: otherContact,
+			receiveAt:   now,
+			wantErr:     ErrConversationContactNotOwner,
+			wantLen:     1,
+		},
+		{
+			name:       "conversation has no contact",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			contactID:  nil,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     ErrConversationHasNoContact,
+			wantLen:     1,
+		},
+		{
+			name:       "duplicate message",
+			convStatus: ConversationStatusPending,
+			contactID:  &contactID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg.AssignExternalID("wa-001")
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     ErrConversationDuplicateMessage,
+			wantLen:     1,
+		},
+		{
+			name:       "without external ID",
+			convStatus: ConversationStatusPending,
+			contactID:  &contactID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     nil,
+			wantLen:     2,
+		},
+		{
+			name:       "updates timestamp",
+			convStatus: ConversationStatusPending,
+			contactID:  &contactID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg.AssignExternalID("wa-002")
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   later,
+			wantErr:     nil,
+			wantLen:     2,
+		},
+		{
+			name:       "expired conversation rejects late message",
+			convStatus: ConversationStatusExpired,
+			contactID:  &contactID,
+			finishedAt: &finishedAt,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     ErrConversationNotAcceptingMessages,
+			wantLen:     1,
+		},
+		{
+			name:       "resolved conversation rejects late message",
+			convStatus: ConversationStatusResolved,
+			contactID:  &contactID,
+			finishedAt: &finishedAt,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     ErrConversationNotAcceptingMessages,
+			wantLen:     1,
+		},
+		{
+			name:       "expired conversation accepts message before finishedAt",
+			convStatus: ConversationStatusExpired,
+			contactID:  &contactID,
+			finishedAt: &lateFinishedAt,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			receiveFrom: contactID,
+			receiveAt:   now,
+			wantErr:     nil,
+			wantLen:     2,
+		},
+	}
 
-	// Act
-	err := conv.ReceiveContactMessage(contactID, *newMsg, later)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			existingMsg.AssignExternalID("wa-001")
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{existingMsg}, tt.agentID, tt.contactID, now, nil, tt.finishedAt)
 
-	// Assert
-	assert.NoError(t, err)
-	assert.Equal(t, &later, conv.UpdatedAt())
+			newMsg := tt.newMsgFunc()
+
+			// Act
+			err := conv.ReceiveContactMessage(tt.receiveFrom, newMsg, tt.receiveAt)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+				if tt.name == "updates timestamp" {
+					assert.Equal(t, &tt.receiveAt, conv.UpdatedAt())
+				}
+			}
+			assert.Len(t, conv.Messages(), tt.wantLen)
+		})
+	}
+}
+
+func TestConversation_SendAgentMessage(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	otherAgent := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		agentID    *uuid.UUID
+		finishedAt *time.Time
+		newMsgFunc func() *Message
+		sendAgent  uuid.UUID
+		wantErr    error
+		wantLen    int
+		wantAgent  *uuid.UUID
+		wantStatus ConversationStatus
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			sendAgent:  agentID,
+			wantErr:    nil,
+			wantLen:    2,
+			wantAgent:  &agentID,
+			wantStatus: ConversationStatusAssigned,
+		},
+		{
+			name:       "claim pending conversation",
+			convStatus: ConversationStatusPending,
+			agentID:    nil,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			sendAgent:  agentID,
+			wantErr:    nil,
+			wantLen:    2,
+			wantAgent:  &agentID,
+			wantStatus: ConversationStatusAssigned,
+		},
+		{
+			name:       "agent not owner",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &otherAgent, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			sendAgent:  otherAgent,
+			wantErr:    ErrConversationAgentNotOwner,
+			wantLen:    1,
+			wantAgent:  &agentID,
+			wantStatus: ConversationStatusAssigned,
+		},
+		{
+			name:       "sync external ID",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				msg.AssignExternalID("wa-agent-001")
+				return msg
+			},
+			sendAgent:  agentID,
+			wantErr:    nil,
+			wantLen:    2,
+			wantAgent:  &agentID,
+			wantStatus: ConversationStatusAssigned,
+		},
+		{
+			name:       "without external ID",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			sendAgent:  agentID,
+			wantErr:    nil,
+			wantLen:    2,
+			wantAgent:  &agentID,
+			wantStatus: ConversationStatusAssigned,
+		},
+		{
+			name:       "expired conversation rejects late message",
+			convStatus: ConversationStatusExpired,
+			agentID:    &agentID,
+			finishedAt: &finishedAt,
+			newMsgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			sendAgent:  agentID,
+			wantErr:    ErrConversationNotAcceptingMessages,
+			wantLen:    1,
+			wantAgent:  &agentID,
+			wantStatus: ConversationStatusExpired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{existingMsg}, tt.agentID, &contactID, now, nil, tt.finishedAt)
+
+			newMsg := tt.newMsgFunc()
+
+			// Act
+			err := conv.SendAgentMessage(tt.sendAgent, newMsg, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, &now, conv.UpdatedAt())
+			}
+			assert.Len(t, conv.Messages(), tt.wantLen)
+			assert.Equal(t, tt.wantAgent, conv.AgentID())
+			assert.Equal(t, tt.wantStatus, conv.Status())
+		})
+	}
 }
