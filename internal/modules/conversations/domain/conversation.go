@@ -19,6 +19,7 @@ var (
 	ErrConversationFinishedAtMissing      = errors.New("conversation is finished but has no finishedAt timestamp")
 	ErrConversationAgentNotOwner          = errors.New("cannot send message: agent does not belong to this conversation")
 	ErrConversationFinished               = errors.New("conversation is finished")
+	ErrConversationNotFound               = errors.New("conversation not found")
 )
 
 type Conversation struct {
@@ -60,6 +61,32 @@ func NewConversation(
 		return nil, ErrConversationFinishedAtMissing
 	}
 
+	return newConversation(id, status, messages, agentID, contactID, createdAt, updatedAt, finishedAt), nil
+}
+
+func RehydrateConversation(
+	id uuid.UUID,
+	status ConversationStatus,
+	messages []*Message,
+	agentID *uuid.UUID,
+	contactID *uuid.UUID,
+	createdAt time.Time,
+	updatedAt *time.Time,
+	finishedAt *time.Time,
+) *Conversation {
+	return newConversation(id, status, messages, agentID, contactID, createdAt, updatedAt, finishedAt)
+}
+
+func newConversation(
+	id uuid.UUID,
+	status ConversationStatus,
+	messages []*Message,
+	agentID *uuid.UUID,
+	contactID *uuid.UUID,
+	createdAt time.Time,
+	updatedAt *time.Time,
+	finishedAt *time.Time,
+) *Conversation {
 	found := make(map[uuid.UUID]*Message, len(messages))
 	externalIdx := make(map[string]uuid.UUID, len(messages))
 	for _, msg := range messages {
@@ -80,7 +107,7 @@ func NewConversation(
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 		finishedAt:     finishedAt,
-	}, nil
+	}
 }
 
 func (c *Conversation) ID() uuid.UUID              { return c.id }
@@ -180,6 +207,26 @@ func (c *Conversation) SendAgentMessage(agentID uuid.UUID, msg *Message, at time
 
 	c.found[msg.ID()] = msg
 	c.dirty[msg.ID()] = msg
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) AssignAgentMessageExternalID(msgID uuid.UUID, externalMessageID string, at time.Time) error {
+	msg, exists := c.found[msgID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	if msg.AgentID() == nil {
+		return ErrConversationAgentNotOwner
+	}
+
+	if err := msg.AssignExternalID(externalMessageID); err != nil {
+		return err
+	}
+
+	c.externalMsgIdx[externalMessageID] = msgID
+	c.dirty[msgID] = msg
 	c.registerActivity(at)
 	return nil
 }

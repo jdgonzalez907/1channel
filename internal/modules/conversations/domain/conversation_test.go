@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"uuid"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewConversation(t *testing.T) {
@@ -15,7 +16,7 @@ func TestNewConversation(t *testing.T) {
 	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 	messages := []*Message{msg}
 
 	tests := []struct {
@@ -135,7 +136,7 @@ func TestConversation_Getters(t *testing.T) {
 	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 
 	// Act
 	conv, err := NewConversation(id, ConversationStatusAssigned, []*Message{msg}, &agentID, &contactID, now, nil, nil)
@@ -159,8 +160,8 @@ func TestConversation_Messages(t *testing.T) {
 	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
-	msg1, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	msg2, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	msg1, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
+	msg2, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 
 	// Act
 	conv, err := NewConversation(convID, ConversationStatusAssigned, []*Message{msg1, msg2}, &agentID, nil, now, nil, nil)
@@ -198,7 +199,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				msg.AssignExternalID("wa-002")
 				return msg
 			},
@@ -212,7 +213,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &otherContact, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &otherContact, nil, now, nil, nil, nil)
 				return msg
 			},
 			receiveFrom: otherContact,
@@ -226,7 +227,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			agentID:    &agentID,
 			contactID:  nil,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return msg
 			},
 			receiveFrom: contactID,
@@ -239,7 +240,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				msg.AssignExternalID("wa-001")
 				return msg
 			},
@@ -253,7 +254,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return msg
 			},
 			receiveFrom: contactID,
@@ -266,7 +267,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				msg.AssignExternalID("wa-002")
 				return msg
 			},
@@ -281,7 +282,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			contactID:  &contactID,
 			finishedAt: &finishedAt,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return msg
 			},
 			receiveFrom: contactID,
@@ -295,7 +296,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			contactID:  &contactID,
 			finishedAt: &finishedAt,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return msg
 			},
 			receiveFrom: contactID,
@@ -309,7 +310,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			contactID:  &contactID,
 			finishedAt: &lateFinishedAt,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return msg
 			},
 			receiveFrom: contactID,
@@ -321,7 +322,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			existingMsg.AssignExternalID("wa-001")
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{existingMsg}, tt.agentID, tt.contactID, now, nil, tt.finishedAt)
 
@@ -370,7 +371,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -384,7 +385,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			agentID:    nil,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -398,7 +399,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &otherAgent, nil, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &otherAgent, nil, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  otherAgent,
@@ -412,7 +413,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 				msg.AssignExternalID("wa-agent-001")
 				return msg
 			},
@@ -427,7 +428,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -442,7 +443,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			agentID:    &agentID,
 			finishedAt: &finishedAt,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -455,7 +456,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{existingMsg}, tt.agentID, &contactID, now, nil, tt.finishedAt)
 
 			newMsg := tt.newMsgFunc()
@@ -505,7 +506,7 @@ func TestConversation_AgentReadConversation(t *testing.T) {
 			readAgent:   agentID,
 			readAt:      now,
 			setupMsgs: func() []*Message {
-				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return []*Message{contactMsg}
 			},
 			wantErr:       nil,
@@ -518,7 +519,7 @@ func TestConversation_AgentReadConversation(t *testing.T) {
 			readAgent:   otherAgent,
 			readAt:      now,
 			setupMsgs: func() []*Message {
-				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return []*Message{contactMsg}
 			},
 			wantErr:       ErrConversationAgentNotOwner,
@@ -531,8 +532,8 @@ func TestConversation_AgentReadConversation(t *testing.T) {
 			readAgent:   agentID,
 			readAt:      now,
 			setupMsgs: func() []*Message {
-				agentMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
-				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				agentMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return []*Message{agentMsg, contactMsg}
 			},
 			wantErr:       nil,
@@ -546,7 +547,7 @@ func TestConversation_AgentReadConversation(t *testing.T) {
 			readAgent:   agentID,
 			readAt:      now,
 			setupMsgs: func() []*Message {
-				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return []*Message{contactMsg}
 			},
 			wantErr:       nil,
@@ -559,8 +560,8 @@ func TestConversation_AgentReadConversation(t *testing.T) {
 			readAgent:   agentID,
 			readAt:      later,
 			setupMsgs: func() []*Message {
-				readMsg, _ := NewMessage(uuid.NewV7(), MessageStatusRead, MessageTypeText, &text, nil, &contactID, now, &now, nil, nil)
-				unreadMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				readMsg, _ := NewMessage(uuid.NewV7(), MessageStatusRead, MessageTypeText, &text, nil, &contactID, nil, now, &now, nil, nil)
+				unreadMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 				return []*Message{readMsg, unreadMsg}
 			},
 			wantErr:       nil,
@@ -601,9 +602,9 @@ func TestConversation_ReceiveContactMessage_DoesNotRetrocedeUpdatedAt(t *testing
 	now := time.Now()
 	later := now.Add(time.Hour)
 	text := "hello"
-	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []*Message{existingMsg}, nil, &contactID, now, &later, nil)
-	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 
 	// Act
 	err := conv.ReceiveContactMessage(contactID, newMsg, now)
@@ -687,8 +688,8 @@ func TestConversation_AgentEditMessage(t *testing.T) {
 				status = MessageStatusSent
 			}
 
-			agentMsg, _ := NewMessage(agentMsgID, status, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
-			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			agentMsg, _ := NewMessage(agentMsgID, status, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
 			// Act
@@ -780,8 +781,8 @@ func TestConversation_AgentDeleteMessage(t *testing.T) {
 				status = MessageStatusSent
 			}
 
-			agentMsg, _ := NewMessage(agentMsgID, status, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
-			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			agentMsg, _ := NewMessage(agentMsgID, status, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
 			// Act
@@ -859,8 +860,8 @@ func TestConversation_MarkAgentMessageFailed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
-			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
 			// Act
@@ -957,9 +958,9 @@ func TestConversation_ReceiveContactMessageEdit(t *testing.T) {
 				status = MessageStatusSent
 			}
 
-			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			contactMsg.AssignExternalID(contactExternalID)
-			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 			agentMsg.AssignExternalID(agentExternalID)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
@@ -1057,9 +1058,9 @@ func TestConversation_ReceiveContactMessageDelete(t *testing.T) {
 				status = MessageStatusSent
 			}
 
-			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			contactMsg.AssignExternalID(contactExternalID)
-			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 			agentMsg.AssignExternalID(agentExternalID)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
@@ -1089,7 +1090,7 @@ func TestConversation_ReceiveContactMessageEdit_DiscardsStaleEdit(t *testing.T) 
 	externalID := "wa-contact-001"
 	msgID := uuid.NewV7()
 
-	contactMsg, _ := NewMessage(msgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	contactMsg, _ := NewMessage(msgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 	contactMsg.AssignExternalID(externalID)
 	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{contactMsg}, &agentID, &contactID, now, nil, nil)
 	conv.ReceiveContactMessageEdit(contactID, externalID, "newest", newestAt)
@@ -1157,7 +1158,7 @@ func TestConversation_ExpireConversation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{msg}, tt.agentID, &contactID, now, tt.updatedAt, tt.finishedAt)
 
 			// Act
@@ -1245,7 +1246,7 @@ func TestConversation_ResolveConversation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{msg}, tt.agentID, &contactID, now, tt.updatedAt, tt.finishedAt)
 
 			// Act
@@ -1272,9 +1273,9 @@ func TestConversation_Messages_OrderedBySentAt(t *testing.T) {
 	now := time.Now()
 	text := "hello"
 
-	msgLate, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now.Add(2*time.Hour), nil, nil, nil)
-	msgEarly, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	msgMid, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now.Add(time.Hour), nil, nil, nil)
+	msgLate, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now.Add(2*time.Hour), nil, nil, nil)
+	msgEarly, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
+	msgMid, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now.Add(time.Hour), nil, nil, nil)
 
 	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{msgLate, msgEarly, msgMid}, &agentID, &contactID, now, nil, nil)
 
@@ -1295,8 +1296,8 @@ func TestConversation_Messages_TieBreakByID(t *testing.T) {
 	now := time.Now()
 	text := "hello"
 
-	msgA, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
-	msgB, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+	msgA, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
+	msgB, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
 
 	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{msgB, msgA}, &agentID, &contactID, now, nil, nil)
 
@@ -1312,4 +1313,161 @@ func TestConversation_Messages_TieBreakByID(t *testing.T) {
 	assert.Len(t, msgs, 2)
 	assert.Equal(t, first.ID(), msgs[0].ID())
 	assert.Equal(t, second.ID(), msgs[1].ID())
+}
+
+func TestRehydrateConversation(t *testing.T) {
+	convID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	externalID := "wa-contact-001"
+
+	tests := []struct {
+		name       string
+		id         uuid.UUID
+		status     ConversationStatus
+		messages   []*Message
+		agentID    *uuid.UUID
+		contactID  *uuid.UUID
+		finishedAt *time.Time
+		wantLen    int
+	}{
+		{
+			name:      "hydrates without messages",
+			id:        convID,
+			status:    ConversationStatusPending,
+			messages:  nil,
+			contactID: &contactID,
+			wantLen:   0,
+		},
+		{
+			name:      "hydrates with messages",
+			id:        convID,
+			status:    ConversationStatusAssigned,
+			messages:  []*Message{mustMessage(t, contactID)},
+			contactID: &contactID,
+			wantLen:   1,
+		},
+		{
+			name:      "maps an invalid state directly",
+			id:        uuid.Nil(),
+			status:    ConversationStatusResolved,
+			contactID: nil,
+			wantLen:   0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Act
+			conv := RehydrateConversation(tt.id, tt.status, tt.messages, tt.agentID, tt.contactID, now, nil, tt.finishedAt)
+
+			// Assert
+			assert.NotNil(t, conv)
+			assert.Equal(t, tt.id, conv.ID())
+			assert.Equal(t, tt.status, conv.Status())
+			assert.Len(t, conv.Messages(), tt.wantLen)
+		})
+	}
+
+	t.Run("builds the external message index", func(t *testing.T) {
+		// Arrange
+		message := mustMessageWithExternalID(t, contactID, externalID)
+
+		// Act
+		conv := RehydrateConversation(convID, ConversationStatusPending, []*Message{message}, nil, &contactID, now, nil, nil)
+
+		// Assert
+		assert.Equal(t, message.ID(), conv.externalMsgIdx[externalID])
+	})
+}
+
+func mustMessageWithExternalID(t *testing.T, contactID uuid.UUID, externalID string) *Message {
+	t.Helper()
+	text := "hello"
+	msg, err := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, &externalID, time.Now(), nil, nil, nil)
+	assert.NoError(t, err)
+	return msg
+}
+
+func TestConversation_AssignAgentMessageExternalID(t *testing.T) {
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+
+	tests := []struct {
+		name        string
+		msgID       func(agentMsg *Message, contactMsg *Message) uuid.UUID
+		externalID  string
+		preassigned string
+		wantErr     error
+	}{
+		{
+			name:       "assign external id to agent message",
+			msgID:      func(agentMsg *Message, contactMsg *Message) uuid.UUID { return agentMsg.ID() },
+			externalID: "wa-agent-001",
+			wantErr:    nil,
+		},
+		{
+			name:       "message not found",
+			msgID:      func(agentMsg *Message, contactMsg *Message) uuid.UUID { return uuid.NewV7() },
+			externalID: "wa-agent-002",
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "not an agent message",
+			msgID:      func(agentMsg *Message, contactMsg *Message) uuid.UUID { return contactMsg.ID() },
+			externalID: "wa-agent-003",
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:        "external id already assigned",
+			msgID:       func(agentMsg *Message, contactMsg *Message) uuid.UUID { return agentMsg.ID() },
+			externalID:  "wa-agent-004",
+			preassigned: "wa-agent-existing",
+			wantErr:     ErrMessageExternalIDAlreadySet,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			agentMsg := mustMessageWithAgent(t, agentID)
+			if tt.preassigned != "" {
+				assert.NoError(t, agentMsg.AssignExternalID(tt.preassigned))
+			}
+			contactMsg := mustMessage(t, contactID)
+			conv, err := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, nil)
+			assert.NoError(t, err)
+
+			// Act
+			err = conv.AssignAgentMessageExternalID(tt.msgID(agentMsg, contactMsg), tt.externalID, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotNil(t, agentMsg.ExternalID())
+			assert.Equal(t, tt.externalID, *agentMsg.ExternalID())
+			assert.Equal(t, agentMsg.ID(), conv.externalMsgIdx[tt.externalID])
+		})
+	}
+}
+
+func mustMessage(t *testing.T, contactID uuid.UUID) *Message {
+	t.Helper()
+	text := "hello"
+	msg, err := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, time.Now(), nil, nil, nil)
+	assert.NoError(t, err)
+	return msg
+}
+
+func mustMessageWithAgent(t *testing.T, agentID uuid.UUID) *Message {
+	t.Helper()
+	text := "hello"
+	msg, err := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, time.Now(), nil, nil, nil)
+	assert.NoError(t, err)
+	return msg
 }

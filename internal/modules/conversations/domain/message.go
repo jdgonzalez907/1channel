@@ -4,8 +4,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/rivo/uniseg"
 	"uuid"
+
+	"github.com/rivo/uniseg"
 )
 
 const (
@@ -48,6 +49,7 @@ func NewMessage(
 	text *string,
 	agentID *uuid.UUID,
 	contactID *uuid.UUID,
+	externalID *string,
 	sentAt time.Time,
 	readAt *time.Time,
 	editedAt *time.Time,
@@ -59,6 +61,10 @@ func NewMessage(
 
 	if (agentID == nil && contactID == nil) || (agentID != nil && contactID != nil) {
 		return nil, ErrMessageInvalidOwner
+	}
+
+	if externalID != nil && *externalID == "" {
+		return nil, ErrMessageExternalIDInvalid
 	}
 
 	if msgType == MessageTypeText {
@@ -76,18 +82,51 @@ func NewMessage(
 			return nil, ErrMessageTextTooLong
 		}
 	}
+	return newMessage(id, status, msgType, text, agentID, contactID, externalID, sentAt, readAt, editedAt, deletedAt), nil
+}
+
+func RehydrateMessage(
+	id uuid.UUID,
+	status MessageStatus,
+	msgType MessageType,
+	text *string,
+	agentID *uuid.UUID,
+	contactID *uuid.UUID,
+	externalID *string,
+	sentAt time.Time,
+	readAt *time.Time,
+	editedAt *time.Time,
+	deletedAt *time.Time,
+) *Message {
+	return newMessage(id, status, msgType, text, agentID, contactID, externalID, sentAt, readAt, editedAt, deletedAt)
+}
+
+func newMessage(
+	id uuid.UUID,
+	status MessageStatus,
+	msgType MessageType,
+	text *string,
+	agentID *uuid.UUID,
+	contactID *uuid.UUID,
+	externalID *string,
+	sentAt time.Time,
+	readAt *time.Time,
+	editedAt *time.Time,
+	deletedAt *time.Time,
+) *Message {
 	return &Message{
-		id:        id,
-		status:    status,
-		msgType:   msgType,
-		text:      text,
-		agentID:   agentID,
-		contactID: contactID,
-		sentAt:    sentAt,
-		readAt:    readAt,
-		editedAt:  editedAt,
-		deletedAt: deletedAt,
-	}, nil
+		id:         id,
+		status:     status,
+		msgType:    msgType,
+		text:       text,
+		agentID:    agentID,
+		contactID:  contactID,
+		externalID: externalID,
+		sentAt:     sentAt,
+		readAt:     readAt,
+		editedAt:   editedAt,
+		deletedAt:  deletedAt,
+	}
 }
 
 func (m *Message) ID() uuid.UUID         { return m.id }
