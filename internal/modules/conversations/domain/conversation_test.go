@@ -1102,3 +1102,214 @@ func TestConversation_ReceiveContactMessageEdit_DiscardsStaleEdit(t *testing.T) 
 	assert.Equal(t, "newest", *conv.found[msgID].Text())
 	assert.Equal(t, &newestAt, conv.found[msgID].EditedAt())
 }
+
+func TestConversation_ExpireConversation(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	at := now.Add(time.Hour)
+	earlier := now.Add(-time.Hour)
+	text := "hello"
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		agentID    *uuid.UUID
+		updatedAt  *time.Time
+		finishedAt *time.Time
+		wantErr    error
+		wantStatus ConversationStatus
+	}{
+		{
+			name:       "expire pending",
+			convStatus: ConversationStatusPending,
+			wantStatus: ConversationStatusExpired,
+		},
+		{
+			name:       "expire assigned",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			wantStatus: ConversationStatusExpired,
+		},
+		{
+			name:       "fail already expired",
+			convStatus: ConversationStatusExpired,
+			agentID:    &agentID,
+			finishedAt: &earlier,
+			wantErr:    ErrConversationFinished,
+		},
+		{
+			name:       "fail already resolved",
+			convStatus: ConversationStatusResolved,
+			agentID:    &agentID,
+			finishedAt: &earlier,
+			wantErr:    ErrConversationFinished,
+		},
+		{
+			name:       "registers activity",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			updatedAt:  &earlier,
+			wantStatus: ConversationStatusExpired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{msg}, tt.agentID, &contactID, now, tt.updatedAt, tt.finishedAt)
+
+			// Act
+			err := conv.ExpireConversation(at)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, conv.Status())
+			assert.Equal(t, &at, conv.FinishedAt())
+			assert.Equal(t, &at, conv.UpdatedAt())
+		})
+	}
+}
+
+func TestConversation_ResolveConversation(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	otherAgent := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	at := now.Add(time.Hour)
+	earlier := now.Add(-time.Hour)
+	text := "hello"
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		agentID    *uuid.UUID
+		updatedAt  *time.Time
+		finishedAt *time.Time
+		callerID   uuid.UUID
+		wantErr    error
+		wantStatus ConversationStatus
+	}{
+		{
+			name:       "resolve assigned",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			callerID:   agentID,
+			wantStatus: ConversationStatusResolved,
+		},
+		{
+			name:       "fail agent not owner",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			callerID:   otherAgent,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "fail conversation has no agent",
+			convStatus: ConversationStatusPending,
+			callerID:   agentID,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "fail already resolved",
+			convStatus: ConversationStatusResolved,
+			agentID:    &agentID,
+			finishedAt: &earlier,
+			callerID:   agentID,
+			wantErr:    ErrConversationFinished,
+		},
+		{
+			name:       "fail already expired",
+			convStatus: ConversationStatusExpired,
+			agentID:    &agentID,
+			finishedAt: &earlier,
+			callerID:   agentID,
+			wantErr:    ErrConversationFinished,
+		},
+		{
+			name:       "registers activity",
+			convStatus: ConversationStatusAssigned,
+			agentID:    &agentID,
+			updatedAt:  &earlier,
+			callerID:   agentID,
+			wantStatus: ConversationStatusResolved,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{msg}, tt.agentID, &contactID, now, tt.updatedAt, tt.finishedAt)
+
+			// Act
+			err := conv.ResolveConversation(tt.callerID, at)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, conv.Status())
+			assert.Equal(t, &at, conv.FinishedAt())
+			assert.Equal(t, &at, conv.UpdatedAt())
+		})
+	}
+}
+
+func TestConversation_Messages_OrderedBySentAt(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	text := "hello"
+
+	msgLate, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now.Add(2*time.Hour), nil, nil, nil)
+	msgEarly, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	msgMid, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now.Add(time.Hour), nil, nil, nil)
+
+	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{msgLate, msgEarly, msgMid}, &agentID, &contactID, now, nil, nil)
+
+	// Act
+	msgs := conv.Messages()
+
+	// Assert
+	assert.Len(t, msgs, 3)
+	assert.Equal(t, msgEarly.ID(), msgs[0].ID())
+	assert.Equal(t, msgMid.ID(), msgs[1].ID())
+	assert.Equal(t, msgLate.ID(), msgs[2].ID())
+}
+
+func TestConversation_Messages_TieBreakByID(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	text := "hello"
+
+	msgA, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	msgB, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+
+	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{msgB, msgA}, &agentID, &contactID, now, nil, nil)
+
+	first, second := msgA, msgB
+	if msgB.ID().Compare(msgA.ID()) < 0 {
+		first, second = msgB, msgA
+	}
+
+	// Act
+	msgs := conv.Messages()
+
+	// Assert
+	assert.Len(t, msgs, 2)
+	assert.Equal(t, first.ID(), msgs[0].ID())
+	assert.Equal(t, second.ID(), msgs[1].ID())
+}

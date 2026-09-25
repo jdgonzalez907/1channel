@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"uuid"
@@ -17,7 +18,7 @@ var (
 	ErrConversationNotAcceptingMessages   = errors.New("conversation is not accepting messages at this time")
 	ErrConversationFinishedAtMissing      = errors.New("conversation is finished but has no finishedAt timestamp")
 	ErrConversationAgentNotOwner          = errors.New("cannot send message: agent does not belong to this conversation")
-	ErrConversationFinished               = errors.New("conversation is finished, agent cannot modify")
+	ErrConversationFinished               = errors.New("conversation is finished")
 )
 
 type Conversation struct {
@@ -95,6 +96,15 @@ func (c *Conversation) Messages() []*Message {
 	for _, msg := range c.found {
 		msgs = append(msgs, msg)
 	}
+
+	sort.Slice(msgs, func(i, j int) bool {
+		if msgs[i].SentAt().Equal(msgs[j].SentAt()) {
+			return msgs[i].ID().Compare(msgs[j].ID()) < 0
+		}
+
+		return msgs[i].SentAt().Before(msgs[j].SentAt())
+	})
+
 	return msgs
 }
 
@@ -110,7 +120,7 @@ func (c *Conversation) ensureAcceptsMessages(at time.Time) error {
 	return ErrConversationNotAcceptingMessages
 }
 
-func (c *Conversation) ensureAgentCanModify() error {
+func (c *Conversation) ensureNotFinished() error {
 	if c.status == ConversationStatusExpired || c.status == ConversationStatusResolved {
 		return ErrConversationFinished
 	}
@@ -190,8 +200,34 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 	return nil
 }
 
+func (c *Conversation) ExpireConversation(at time.Time) error {
+	if err := c.ensureNotFinished(); err != nil {
+		return err
+	}
+
+	c.status = ConversationStatusExpired
+	c.finishedAt = &at
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) ResolveConversation(agentID uuid.UUID, at time.Time) error {
+	if err := c.ensureNotFinished(); err != nil {
+		return err
+	}
+
+	if c.agentID == nil || *c.agentID != agentID {
+		return ErrConversationAgentNotOwner
+	}
+
+	c.status = ConversationStatusResolved
+	c.finishedAt = &at
+	c.registerActivity(at)
+	return nil
+}
+
 func (c *Conversation) AgentEditMessage(agentID uuid.UUID, msgID uuid.UUID, newText string, at time.Time) error {
-	if err := c.ensureAgentCanModify(); err != nil {
+	if err := c.ensureNotFinished(); err != nil {
 		return err
 	}
 
@@ -218,7 +254,7 @@ func (c *Conversation) AgentEditMessage(agentID uuid.UUID, msgID uuid.UUID, newT
 }
 
 func (c *Conversation) AgentDeleteMessage(agentID uuid.UUID, msgID uuid.UUID, at time.Time) error {
-	if err := c.ensureAgentCanModify(); err != nil {
+	if err := c.ensureNotFinished(); err != nil {
 		return err
 	}
 
