@@ -52,6 +52,15 @@ func TestNewMessage(t *testing.T) {
 			wantErr: ErrMessageEmptyText,
 		},
 		{
+			name:    "blank text for text type",
+			id:      validID,
+			status:  MessageStatusSent,
+			msgType: MessageTypeText,
+			text:    strPtr(""),
+			sentAt:  now,
+			wantErr: ErrMessageEmptyText,
+		},
+		{
 			name:    "text too long",
 			id:      validID,
 			status:  MessageStatusSent,
@@ -96,7 +105,47 @@ func TestMessage_Getters(t *testing.T) {
 	assert.Nil(t, msg.ReadAt())
 	assert.Nil(t, msg.EditedAt())
 	assert.Nil(t, msg.DeletedAt())
+	assert.Nil(t, msg.ExternalID())
 }
+
+func TestMessage_AssignExternalID_Success(t *testing.T) {
+	// Arrange
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, nil, time.Now(), nil, nil, nil)
+
+	// Act
+	err := msg.AssignExternalID("wa-msg-001")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "wa-msg-001", *msg.ExternalID())
+}
+
+func TestMessage_AssignExternalID_AlreadyAssigned(t *testing.T) {
+	// Arrange
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, nil, time.Now(), nil, nil, nil)
+	msg.AssignExternalID("wa-msg-001")
+
+	// Act
+	err := msg.AssignExternalID("wa-msg-002")
+
+	// Assert
+	assert.ErrorIs(t, err, ErrMessageExternalIDAlreadySet)
+	assert.Equal(t, "wa-msg-001", *msg.ExternalID())
+}
+
+func TestMessage_AssignExternalID_EmptyValue(t *testing.T) {
+	// Arrange
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, nil, time.Now(), nil, nil, nil)
+
+	// Act
+	err := msg.AssignExternalID("")
+
+	// Assert
+	assert.ErrorIs(t, err, ErrMessageExternalIDInvalid)
+	assert.Nil(t, msg.ExternalID())
+}
+
+func strPtr(s string) *string { return &s }
 
 func longText(n int) *string {
 	s := make([]rune, n)

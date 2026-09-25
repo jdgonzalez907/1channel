@@ -14,22 +14,25 @@ const (
 )
 
 var (
-	ErrMessageInvalidID   = errors.New("message identifier is invalid")
-	ErrMessageEmptyText   = errors.New("message text cannot be empty")
-	ErrMessageTextTooLong = errors.New("message text exceeds maximum length")
+	ErrMessageInvalidID            = errors.New("message identifier is invalid")
+	ErrMessageEmptyText            = errors.New("message text cannot be empty")
+	ErrMessageTextTooLong          = errors.New("message text exceeds maximum length")
+	ErrMessageExternalIDInvalid    = errors.New("message external identifier is invalid")
+	ErrMessageExternalIDAlreadySet = errors.New("message external identifier is already assigned")
 )
 
 type Message struct {
-	id        uuid.UUID
-	status    MessageStatus
-	msgType   MessageType
-	text      *string
-	agentID   *uuid.UUID
-	contactID *uuid.UUID
-	sentAt    time.Time
-	readAt    *time.Time
-	editedAt  *time.Time
-	deletedAt *time.Time
+	id         uuid.UUID
+	status     MessageStatus
+	msgType    MessageType
+	text       *string
+	agentID    *uuid.UUID
+	contactID  *uuid.UUID
+	externalID *string
+	sentAt     time.Time
+	readAt     *time.Time
+	editedAt   *time.Time
+	deletedAt  *time.Time
 }
 
 func NewMessage(
@@ -83,3 +86,15 @@ func (m *Message) SentAt() time.Time     { return m.sentAt }
 func (m *Message) ReadAt() *time.Time    { return m.readAt }
 func (m *Message) EditedAt() *time.Time  { return m.editedAt }
 func (m *Message) DeletedAt() *time.Time { return m.deletedAt }
+func (m *Message) ExternalID() *string   { return m.externalID }
+
+func (m *Message) AssignExternalID(id string) error {
+	if m.externalID != nil {
+		return ErrMessageExternalIDAlreadySet
+	}
+	if id == "" {
+		return ErrMessageExternalIDInvalid
+	}
+	m.externalID = &id
+	return nil
+}
