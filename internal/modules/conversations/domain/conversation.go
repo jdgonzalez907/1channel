@@ -17,6 +17,7 @@ var (
 	ErrConversationNotAcceptingMessages   = errors.New("conversation is not accepting messages at this time")
 	ErrConversationFinishedAtMissing      = errors.New("conversation is finished but has no finishedAt timestamp")
 	ErrConversationAgentNotOwner          = errors.New("cannot send message: agent does not belong to this conversation")
+	ErrConversationFinished               = errors.New("conversation is finished, agent cannot modify")
 )
 
 type Conversation struct {
@@ -109,6 +110,20 @@ func (c *Conversation) ensureAcceptsMessages(at time.Time) error {
 	return ErrConversationNotAcceptingMessages
 }
 
+func (c *Conversation) ensureAgentCanModify() error {
+	if c.status == ConversationStatusExpired || c.status == ConversationStatusResolved {
+		return ErrConversationFinished
+	}
+
+	return nil
+}
+
+func (c *Conversation) registerActivity(at time.Time) {
+	if c.updatedAt == nil || at.After(*c.updatedAt) {
+		c.updatedAt = &at
+	}
+}
+
 func (c *Conversation) ReceiveContactMessage(contactID uuid.UUID, msg *Message, at time.Time) error {
 	if err := c.ensureAcceptsMessages(at); err != nil {
 		return err
@@ -131,7 +146,7 @@ func (c *Conversation) ReceiveContactMessage(contactID uuid.UUID, msg *Message, 
 
 	c.found[msg.ID()] = msg
 	c.dirty[msg.ID()] = msg
-	c.updatedAt = &at
+	c.registerActivity(at)
 	return nil
 }
 
@@ -155,7 +170,7 @@ func (c *Conversation) SendAgentMessage(agentID uuid.UUID, msg *Message, at time
 
 	c.found[msg.ID()] = msg
 	c.dirty[msg.ID()] = msg
-	c.updatedAt = &at
+	c.registerActivity(at)
 	return nil
 }
 
@@ -171,6 +186,127 @@ func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) er
 		}
 	}
 
-	c.updatedAt = &at
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) AgentEditMessage(agentID uuid.UUID, msgID uuid.UUID, newText string, at time.Time) error {
+	if err := c.ensureAgentCanModify(); err != nil {
+		return err
+	}
+
+	if c.agentID == nil || *c.agentID != agentID {
+		return ErrConversationAgentNotOwner
+	}
+
+	msg, exists := c.found[msgID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	if msg.AgentID() == nil {
+		return ErrConversationAgentNotOwner
+	}
+
+	if err := msg.EditText(newText, at); err != nil {
+		return err
+	}
+
+	c.dirty[msgID] = msg
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) AgentDeleteMessage(agentID uuid.UUID, msgID uuid.UUID, at time.Time) error {
+	if err := c.ensureAgentCanModify(); err != nil {
+		return err
+	}
+
+	if c.agentID == nil || *c.agentID != agentID {
+		return ErrConversationAgentNotOwner
+	}
+
+	msg, exists := c.found[msgID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	if msg.AgentID() == nil {
+		return ErrConversationAgentNotOwner
+	}
+
+	if err := msg.Delete(at); err != nil {
+		return err
+	}
+
+	c.dirty[msgID] = msg
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) MarkAgentMessageFailed(agentID uuid.UUID, msgID uuid.UUID, at time.Time) error {
+	if c.agentID == nil || *c.agentID != agentID {
+		return ErrConversationAgentNotOwner
+	}
+
+	msg, exists := c.found[msgID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	if err := msg.MarkAsFailed(); err != nil {
+		return err
+	}
+
+	c.dirty[msgID] = msg
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) ReceiveContactMessageEdit(contactID uuid.UUID, externalID string, newText string, at time.Time) error {
+	if c.contactID == nil || contactID != *c.contactID {
+		return ErrConversationContactNotOwner
+	}
+
+	msgID, exists := c.externalMsgIdx[externalID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	msg := c.found[msgID]
+	if msg.ContactID() == nil {
+		return ErrConversationContactNotOwner
+	}
+
+	if err := msg.EditText(newText, at); err != nil {
+		return err
+	}
+
+	c.dirty[msgID] = msg
+	c.registerActivity(at)
+	return nil
+}
+
+func (c *Conversation) ReceiveContactMessageDelete(contactID uuid.UUID, externalID string, at time.Time) error {
+	if c.contactID == nil || contactID != *c.contactID {
+		return ErrConversationContactNotOwner
+	}
+
+	msgID, exists := c.externalMsgIdx[externalID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	msg := c.found[msgID]
+	if msg.ContactID() == nil {
+		return ErrConversationContactNotOwner
+	}
+
+	if err := msg.Delete(at); err != nil {
+		return err
+	}
+
+	c.dirty[msgID] = msg
+	c.registerActivity(at)
 	return nil
 }

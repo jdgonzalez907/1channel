@@ -206,6 +206,278 @@ func TestMessage_MarkAsRead(t *testing.T) {
 	assert.Equal(t, &readAt, msg.ReadAt())
 }
 
+func TestMessage_EditText(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	now := time.Now()
+	editedAt := now.Add(time.Hour)
+	deletedAt := now.Add(2 * time.Hour)
+
+	tests := []struct {
+		name     string
+		msgFunc  func() *Message
+		newText  string
+		at       time.Time
+		wantErr  error
+		wantText string
+		wantEdit bool
+	}{
+		{
+			name: "success",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			newText:  "edited",
+			at:       editedAt,
+			wantErr:  nil,
+			wantText: "edited",
+			wantEdit: true,
+		},
+		{
+			name: "empty text",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			newText: "",
+			at:      editedAt,
+			wantErr: ErrMessageEmptyText,
+		},
+		{
+			name: "text too long",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			newText: *longText(MaxTextLength + 1),
+			at:      editedAt,
+			wantErr: ErrMessageTextTooLong,
+		},
+		{
+			name: "message without text",
+			msgFunc: func() *Message {
+				return &Message{id: uuid.NewV7(), status: MessageStatusSent, msgType: MessageTypeText, agentID: &agentID, sentAt: now}
+			},
+			newText: "edited",
+			at:      editedAt,
+			wantErr: ErrMessageNotText,
+		},
+		{
+			name: "failed message",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusFailed, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			newText: "edited",
+			at:      editedAt,
+			wantErr: ErrMessageFailed,
+		},
+		{
+			name: "deleted message with later timestamp",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusDeleted, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, &deletedAt)
+				return msg
+			},
+			newText: "edited",
+			at:      deletedAt,
+			wantErr: ErrMessageAlreadyDeleted,
+		},
+		{
+			name: "deleted message with earlier timestamp",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusDeleted, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, &deletedAt)
+				return msg
+			},
+			newText:  "edited",
+			at:       now,
+			wantErr:  nil,
+			wantText: "edited",
+			wantEdit: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := tt.msgFunc()
+
+			// Act
+			err := msg.EditText(tt.newText, tt.at)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantText, *msg.Text())
+
+			if tt.wantEdit {
+				assert.Equal(t, tt.at, *msg.EditedAt())
+			}
+		})
+	}
+}
+
+func TestMessage_Delete(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	now := time.Now()
+	later := now.Add(time.Hour)
+	deletedAt := now.Add(-time.Hour)
+
+	tests := []struct {
+		name    string
+		msgFunc func() *Message
+		at      time.Time
+		wantErr error
+	}{
+		{
+			name: "success",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			at:      later,
+			wantErr: nil,
+		},
+		{
+			name: "already deleted with later timestamp",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusDeleted, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, &deletedAt)
+				return msg
+			},
+			at:      now,
+			wantErr: ErrMessageAlreadyDeleted,
+		},
+		{
+			name: "already deleted with earlier timestamp",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusDeleted, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, &deletedAt)
+				return msg
+			},
+			at:      deletedAt.Add(-time.Hour),
+			wantErr: ErrMessageAlreadyDeleted,
+		},
+		{
+			name: "failed message",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusFailed, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			at:      now,
+			wantErr: ErrMessageFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := tt.msgFunc()
+
+			// Act
+			err := msg.Delete(tt.at)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, MessageStatusDeleted, msg.Status())
+			assert.Equal(t, tt.at, *msg.DeletedAt())
+		})
+	}
+}
+
+func TestMessage_MarkAsFailed(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+
+	tests := []struct {
+		name    string
+		msgFunc func() *Message
+		wantErr error
+	}{
+		{
+			name: "success",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			wantErr: nil,
+		},
+		{
+			name: "idempotent",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusFailed, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+				return msg
+			},
+			wantErr: nil,
+		},
+		{
+			name: "message not from agent",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, &contactID, now, nil, nil, nil)
+				return msg
+			},
+			wantErr: ErrMessageNotFromAgent,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := tt.msgFunc()
+
+			// Act
+			err := msg.MarkAsFailed()
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, MessageStatusFailed, msg.Status())
+		})
+	}
+}
+
+func TestMessage_EditText_DiscardsStaleEdit(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	now := time.Now()
+	newestAt := now.Add(time.Hour)
+
+	tests := []struct {
+		name    string
+		newText string
+		at      time.Time
+	}{
+		{name: "earlier timestamp", newText: "stale", at: now},
+		{name: "equal timestamp", newText: "equal", at: newestAt},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+			msg.EditText("newest", newestAt)
+
+			// Act
+			err := msg.EditText(tt.newText, tt.at)
+
+			// Assert
+			assert.NoError(t, err)
+			assert.Equal(t, "newest", *msg.Text())
+			assert.Equal(t, &newestAt, msg.EditedAt())
+		})
+	}
+}
+
 func strPtr(s string) *string { return &s }
 
 func longText(n int) *string {

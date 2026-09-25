@@ -594,3 +594,511 @@ func TestConversation_AgentReadConversation(t *testing.T) {
 		})
 	}
 }
+
+func TestConversation_ReceiveContactMessage_DoesNotRetrocedeUpdatedAt(t *testing.T) {
+	// Arrange
+	contactID := uuid.NewV7()
+	now := time.Now()
+	later := now.Add(time.Hour)
+	text := "hello"
+	existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusPending, []*Message{existingMsg}, nil, &contactID, now, &later, nil)
+	newMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+
+	// Act
+	err := conv.ReceiveContactMessage(contactID, newMsg, now)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, &later, conv.UpdatedAt())
+}
+
+func TestConversation_AgentEditMessage(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	otherAgent := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+	newText := "edited"
+	agentMsgID := uuid.NewV7()
+	contactMsgID := uuid.NewV7()
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		finishedAt *time.Time
+		msgID      uuid.UUID
+		callerID   uuid.UUID
+		msgStatus  MessageStatus
+		wantErr    error
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			wantErr:    nil,
+		},
+		{
+			name:       "agent not owner",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   otherAgent,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "message not found",
+			convStatus: ConversationStatusAssigned,
+			msgID:      uuid.NewV7(),
+			callerID:   agentID,
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "message not from agent",
+			convStatus: ConversationStatusAssigned,
+			msgID:      contactMsgID,
+			callerID:   agentID,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "message failed",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			msgStatus:  MessageStatusFailed,
+			wantErr:    ErrMessageFailed,
+		},
+		{
+			name:       "conversation finished",
+			convStatus: ConversationStatusExpired,
+			finishedAt: &finishedAt,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			wantErr:    ErrConversationFinished,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := tt.msgStatus
+			if status == "" {
+				status = MessageStatusSent
+			}
+
+			agentMsg, _ := NewMessage(agentMsgID, status, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.AgentEditMessage(tt.callerID, tt.msgID, newText, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, newText, *conv.found[tt.msgID].Text())
+			assert.Equal(t, &now, conv.found[tt.msgID].EditedAt())
+		})
+	}
+}
+
+func TestConversation_AgentDeleteMessage(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	otherAgent := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+	agentMsgID := uuid.NewV7()
+	contactMsgID := uuid.NewV7()
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		finishedAt *time.Time
+		msgID      uuid.UUID
+		callerID   uuid.UUID
+		msgStatus  MessageStatus
+		wantErr    error
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			wantErr:    nil,
+		},
+		{
+			name:       "agent not owner",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   otherAgent,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "message not found",
+			convStatus: ConversationStatusAssigned,
+			msgID:      uuid.NewV7(),
+			callerID:   agentID,
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "message not from agent",
+			convStatus: ConversationStatusAssigned,
+			msgID:      contactMsgID,
+			callerID:   agentID,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "message failed",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			msgStatus:  MessageStatusFailed,
+			wantErr:    ErrMessageFailed,
+		},
+		{
+			name:       "conversation finished",
+			convStatus: ConversationStatusExpired,
+			finishedAt: &finishedAt,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			wantErr:    ErrConversationFinished,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := tt.msgStatus
+			if status == "" {
+				status = MessageStatusSent
+			}
+
+			agentMsg, _ := NewMessage(agentMsgID, status, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.AgentDeleteMessage(tt.callerID, tt.msgID, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, MessageStatusDeleted, conv.found[tt.msgID].Status())
+			assert.Equal(t, &now, conv.found[tt.msgID].DeletedAt())
+		})
+	}
+}
+
+func TestConversation_MarkAgentMessageFailed(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	otherAgent := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+	agentMsgID := uuid.NewV7()
+	contactMsgID := uuid.NewV7()
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		finishedAt *time.Time
+		msgID      uuid.UUID
+		callerID   uuid.UUID
+		wantErr    error
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			wantErr:    nil,
+		},
+		{
+			name:       "agent not owner",
+			convStatus: ConversationStatusAssigned,
+			msgID:      agentMsgID,
+			callerID:   otherAgent,
+			wantErr:    ErrConversationAgentNotOwner,
+		},
+		{
+			name:       "message not found",
+			convStatus: ConversationStatusAssigned,
+			msgID:      uuid.NewV7(),
+			callerID:   agentID,
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "message not from agent",
+			convStatus: ConversationStatusAssigned,
+			msgID:      contactMsgID,
+			callerID:   agentID,
+			wantErr:    ErrMessageNotFromAgent,
+		},
+		{
+			name:       "conversation finished is allowed",
+			convStatus: ConversationStatusExpired,
+			finishedAt: &finishedAt,
+			msgID:      agentMsgID,
+			callerID:   agentID,
+			wantErr:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{agentMsg, contactMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.MarkAgentMessageFailed(tt.callerID, tt.msgID, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, MessageStatusFailed, conv.found[tt.msgID].Status())
+		})
+	}
+}
+
+func TestConversation_ReceiveContactMessageEdit(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	otherContact := uuid.NewV7()
+	now := time.Now()
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+	newText := "edited"
+	contactMsgID := uuid.NewV7()
+	agentMsgID := uuid.NewV7()
+
+	const (
+		contactExternalID = "wa-contact-001"
+		agentExternalID   = "wa-agent-001"
+	)
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		finishedAt *time.Time
+		externalID string
+		callerID   uuid.UUID
+		msgStatus  MessageStatus
+		wantErr    error
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			wantErr:    nil,
+		},
+		{
+			name:       "contact not owner",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   otherContact,
+			wantErr:    ErrConversationContactNotOwner,
+		},
+		{
+			name:       "externalID not found",
+			convStatus: ConversationStatusAssigned,
+			externalID: "wa-unknown",
+			callerID:   contactID,
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "message not from contact",
+			convStatus: ConversationStatusAssigned,
+			externalID: agentExternalID,
+			callerID:   contactID,
+			wantErr:    ErrConversationContactNotOwner,
+		},
+		{
+			name:       "message failed",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			msgStatus:  MessageStatusFailed,
+			wantErr:    ErrMessageFailed,
+		},
+		{
+			name:       "conversation finished is allowed",
+			convStatus: ConversationStatusExpired,
+			finishedAt: &finishedAt,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			wantErr:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := tt.msgStatus
+			if status == "" {
+				status = MessageStatusSent
+			}
+
+			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			contactMsg.AssignExternalID(contactExternalID)
+			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			agentMsg.AssignExternalID(agentExternalID)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.ReceiveContactMessageEdit(tt.callerID, tt.externalID, newText, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, newText, *conv.found[contactMsgID].Text())
+			assert.Equal(t, &now, conv.found[contactMsgID].EditedAt())
+		})
+	}
+}
+
+func TestConversation_ReceiveContactMessageDelete(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	otherContact := uuid.NewV7()
+	now := time.Now()
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+	contactMsgID := uuid.NewV7()
+	agentMsgID := uuid.NewV7()
+
+	const (
+		contactExternalID = "wa-contact-001"
+		agentExternalID   = "wa-agent-001"
+	)
+
+	tests := []struct {
+		name       string
+		convStatus ConversationStatus
+		finishedAt *time.Time
+		externalID string
+		callerID   uuid.UUID
+		msgStatus  MessageStatus
+		wantErr    error
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			wantErr:    nil,
+		},
+		{
+			name:       "contact not owner",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   otherContact,
+			wantErr:    ErrConversationContactNotOwner,
+		},
+		{
+			name:       "externalID not found",
+			convStatus: ConversationStatusAssigned,
+			externalID: "wa-unknown",
+			callerID:   contactID,
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "message not from contact",
+			convStatus: ConversationStatusAssigned,
+			externalID: agentExternalID,
+			callerID:   contactID,
+			wantErr:    ErrConversationContactNotOwner,
+		},
+		{
+			name:       "message failed",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			msgStatus:  MessageStatusFailed,
+			wantErr:    ErrMessageFailed,
+		},
+		{
+			name:       "conversation finished is allowed",
+			convStatus: ConversationStatusExpired,
+			finishedAt: &finishedAt,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			wantErr:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := tt.msgStatus
+			if status == "" {
+				status = MessageStatusSent
+			}
+
+			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+			contactMsg.AssignExternalID(contactExternalID)
+			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+			agentMsg.AssignExternalID(agentExternalID)
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.ReceiveContactMessageDelete(tt.callerID, tt.externalID, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, MessageStatusDeleted, conv.found[contactMsgID].Status())
+			assert.Equal(t, &now, conv.found[contactMsgID].DeletedAt())
+		})
+	}
+}
+
+func TestConversation_ReceiveContactMessageEdit_DiscardsStaleEdit(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	newestAt := now.Add(time.Hour)
+	text := "hello"
+	externalID := "wa-contact-001"
+	msgID := uuid.NewV7()
+
+	contactMsg, _ := NewMessage(msgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	contactMsg.AssignExternalID(externalID)
+	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{contactMsg}, &agentID, &contactID, now, nil, nil)
+	conv.ReceiveContactMessageEdit(contactID, externalID, "newest", newestAt)
+
+	// Act
+	err := conv.ReceiveContactMessageEdit(contactID, externalID, "stale", now)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, "newest", *conv.found[msgID].Text())
+	assert.Equal(t, &newestAt, conv.found[msgID].EditedAt())
+}
