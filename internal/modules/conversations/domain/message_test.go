@@ -12,6 +12,8 @@ func TestNewMessage(t *testing.T) {
 	validID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
 
 	tests := []struct {
 		name      string
@@ -25,13 +27,24 @@ func TestNewMessage(t *testing.T) {
 		wantErr   error
 	}{
 		{
-			name:    "valid message",
+			name:    "valid message from agent",
 			id:      validID,
 			status:  MessageStatusSent,
 			msgType: MessageTypeText,
 			text:    &text,
+			agentID: &agentID,
 			sentAt:  now,
 			wantErr: nil,
+		},
+		{
+			name:      "valid message from contact",
+			id:        validID,
+			status:    MessageStatusSent,
+			msgType:   MessageTypeText,
+			text:      &text,
+			contactID: &contactID,
+			sentAt:    now,
+			wantErr:   nil,
 		},
 		{
 			name:    "nil uuid",
@@ -39,6 +52,7 @@ func TestNewMessage(t *testing.T) {
 			status:  MessageStatusSent,
 			msgType: MessageTypeText,
 			text:    &text,
+			agentID: &agentID,
 			sentAt:  now,
 			wantErr: ErrMessageInvalidID,
 		},
@@ -48,6 +62,7 @@ func TestNewMessage(t *testing.T) {
 			status:  MessageStatusSent,
 			msgType: MessageTypeText,
 			text:    nil,
+			agentID: &agentID,
 			sentAt:  now,
 			wantErr: ErrMessageEmptyText,
 		},
@@ -57,6 +72,7 @@ func TestNewMessage(t *testing.T) {
 			status:  MessageStatusSent,
 			msgType: MessageTypeText,
 			text:    strPtr(""),
+			agentID: &agentID,
 			sentAt:  now,
 			wantErr: ErrMessageEmptyText,
 		},
@@ -66,8 +82,29 @@ func TestNewMessage(t *testing.T) {
 			status:  MessageStatusSent,
 			msgType: MessageTypeText,
 			text:    longText(1001),
+			agentID: &agentID,
 			sentAt:  now,
 			wantErr: ErrMessageTextTooLong,
+		},
+		{
+			name:    "no owner",
+			id:      validID,
+			status:  MessageStatusSent,
+			msgType: MessageTypeText,
+			text:    &text,
+			sentAt:  now,
+			wantErr: ErrMessageInvalidOwner,
+		},
+		{
+			name:      "two owners",
+			id:        validID,
+			status:    MessageStatusSent,
+			msgType:   MessageTypeText,
+			text:      &text,
+			agentID:   &agentID,
+			contactID: &contactID,
+			sentAt:    now,
+			wantErr:   ErrMessageInvalidOwner,
 		},
 	}
 
@@ -88,21 +125,24 @@ func TestNewMessage(t *testing.T) {
 }
 
 func TestMessage_Getters(t *testing.T) {
+	// Arrange
 	id := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
 	agentID := uuid.NewV7()
-	contactID := uuid.NewV7()
 
-	msg, err := NewMessage(id, MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+	msg, err := NewMessage(id, MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+
+	// Act
 	assert.NoError(t, err)
 
+	// Assert
 	assert.Equal(t, id, msg.ID())
 	assert.Equal(t, MessageStatusSent, msg.Status())
 	assert.Equal(t, MessageTypeText, msg.Type())
 	assert.Equal(t, &text, msg.Text())
 	assert.Equal(t, &agentID, msg.AgentID())
-	assert.Equal(t, &contactID, msg.ContactID())
+	assert.Nil(t, msg.ContactID())
 	assert.Equal(t, now, msg.SentAt())
 	assert.Nil(t, msg.ReadAt())
 	assert.Nil(t, msg.EditedAt())
@@ -112,7 +152,8 @@ func TestMessage_Getters(t *testing.T) {
 
 func TestMessage_AssignExternalID_Success(t *testing.T) {
 	// Arrange
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, nil, time.Now(), nil, nil, nil)
+	agentID := uuid.NewV7()
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, time.Now(), nil, nil, nil)
 
 	// Act
 	err := msg.AssignExternalID("wa-msg-001")
@@ -124,7 +165,8 @@ func TestMessage_AssignExternalID_Success(t *testing.T) {
 
 func TestMessage_AssignExternalID_AlreadyAssigned(t *testing.T) {
 	// Arrange
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, nil, time.Now(), nil, nil, nil)
+	agentID := uuid.NewV7()
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, time.Now(), nil, nil, nil)
 	msg.AssignExternalID("wa-msg-001")
 
 	// Act
@@ -137,7 +179,8 @@ func TestMessage_AssignExternalID_AlreadyAssigned(t *testing.T) {
 
 func TestMessage_AssignExternalID_EmptyValue(t *testing.T) {
 	// Arrange
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), nil, nil, time.Now(), nil, nil, nil)
+	agentID := uuid.NewV7()
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, time.Now(), nil, nil, nil)
 
 	// Act
 	err := msg.AssignExternalID("")
@@ -145,6 +188,22 @@ func TestMessage_AssignExternalID_EmptyValue(t *testing.T) {
 	// Assert
 	assert.ErrorIs(t, err, ErrMessageExternalIDInvalid)
 	assert.Nil(t, msg.ExternalID())
+}
+
+func TestMessage_MarkAsRead(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	now := time.Now()
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, now, nil, nil, nil)
+
+	readAt := now.Add(time.Hour)
+
+	// Act
+	msg.MarkAsRead(readAt)
+
+	// Assert
+	assert.Equal(t, MessageStatusRead, msg.Status())
+	assert.Equal(t, &readAt, msg.ReadAt())
 }
 
 func strPtr(s string) *string { return &s }

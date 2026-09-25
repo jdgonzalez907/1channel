@@ -15,7 +15,7 @@ func TestNewConversation(t *testing.T) {
 	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
 	messages := []*Message{msg}
 
 	tests := []struct {
@@ -135,7 +135,7 @@ func TestConversation_Getters(t *testing.T) {
 	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
-	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
+	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
 
 	// Act
 	conv, err := NewConversation(id, ConversationStatusAssigned, []*Message{msg}, &agentID, &contactID, now, nil, nil)
@@ -156,10 +156,11 @@ func TestConversation_Messages(t *testing.T) {
 	// Arrange
 	convID := uuid.NewV7()
 	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
 	now := time.Now()
 	text := "hello"
-	msg1, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
-	msg2, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, nil, now, nil, nil, nil)
+	msg1, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+	msg2, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
 
 	// Act
 	conv, err := NewConversation(convID, ConversationStatusAssigned, []*Message{msg1, msg2}, &agentID, nil, now, nil, nil)
@@ -369,7 +370,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -383,7 +384,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusPending,
 			agentID:    nil,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -397,7 +398,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &otherAgent, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &otherAgent, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  otherAgent,
@@ -411,7 +412,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
 				msg.AssignExternalID("wa-agent-001")
 				return msg
 			},
@@ -426,7 +427,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			convStatus: ConversationStatusAssigned,
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -441,7 +442,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			agentID:    &agentID,
 			finishedAt: &finishedAt,
 			newMsgFunc: func() *Message {
-				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
 				return msg
 			},
 			sendAgent:  agentID,
@@ -454,7 +455,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, &contactID, now, nil, nil, nil)
+			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{existingMsg}, tt.agentID, &contactID, now, nil, tt.finishedAt)
 
 			newMsg := tt.newMsgFunc()
@@ -472,6 +473,124 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			assert.Len(t, conv.Messages(), tt.wantLen)
 			assert.Equal(t, tt.wantAgent, conv.AgentID())
 			assert.Equal(t, tt.wantStatus, conv.Status())
+		})
+	}
+}
+
+func TestConversation_AgentReadConversation(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	otherAgent := uuid.NewV7()
+	contactID := uuid.NewV7()
+	now := time.Now()
+	later := now.Add(time.Hour)
+	finishedAt := now.Add(-time.Hour)
+	text := "hello"
+
+	tests := []struct {
+		name          string
+		convStatus    ConversationStatus
+		convAgentID   *uuid.UUID
+		finishedAt    *time.Time
+		readAgent     uuid.UUID
+		readAt        time.Time
+		setupMsgs     func() []*Message
+		wantErr       error
+		wantReadCount int
+	}{
+		{
+			name:        "success - mark contact messages as read",
+			convStatus:  ConversationStatusAssigned,
+			convAgentID: &agentID,
+			readAgent:   agentID,
+			readAt:      now,
+			setupMsgs: func() []*Message {
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return []*Message{contactMsg}
+			},
+			wantErr:       nil,
+			wantReadCount: 1,
+		},
+		{
+			name:        "fail - agent not owner",
+			convStatus:  ConversationStatusAssigned,
+			convAgentID: &agentID,
+			readAgent:   otherAgent,
+			readAt:      now,
+			setupMsgs: func() []*Message {
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return []*Message{contactMsg}
+			},
+			wantErr:       ErrConversationAgentNotOwner,
+			wantReadCount: 0,
+		},
+		{
+			name:        "do not mark agent messages as read",
+			convStatus:  ConversationStatusAssigned,
+			convAgentID: &agentID,
+			readAgent:   agentID,
+			readAt:      now,
+			setupMsgs: func() []*Message {
+				agentMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, now, nil, nil, nil)
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return []*Message{agentMsg, contactMsg}
+			},
+			wantErr:       nil,
+			wantReadCount: 1,
+		},
+		{
+			name:        "mark messages in finished conversation",
+			convStatus:  ConversationStatusExpired,
+			convAgentID: &agentID,
+			finishedAt:  &finishedAt,
+			readAgent:   agentID,
+			readAt:      now,
+			setupMsgs: func() []*Message {
+				contactMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return []*Message{contactMsg}
+			},
+			wantErr:       nil,
+			wantReadCount: 1,
+		},
+		{
+			name:        "do not mark already read messages",
+			convStatus:  ConversationStatusAssigned,
+			convAgentID: &agentID,
+			readAgent:   agentID,
+			readAt:      later,
+			setupMsgs: func() []*Message {
+				readMsg, _ := NewMessage(uuid.NewV7(), MessageStatusRead, MessageTypeText, &text, nil, &contactID, now, &now, nil, nil)
+				unreadMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, now, nil, nil, nil)
+				return []*Message{readMsg, unreadMsg}
+			},
+			wantErr:       nil,
+			wantReadCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msgs := tt.setupMsgs()
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, msgs, tt.convAgentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.AgentReadConversation(tt.readAgent, tt.readAt)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, &tt.readAt, conv.UpdatedAt())
+			}
+
+			readCount := 0
+			for _, msg := range conv.Messages() {
+				if msg.ReadAt() != nil {
+					readCount++
+				}
+			}
+			assert.Equal(t, tt.wantReadCount, readCount)
 		})
 	}
 }

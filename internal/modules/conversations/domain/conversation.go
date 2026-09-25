@@ -158,3 +158,19 @@ func (c *Conversation) SendAgentMessage(agentID uuid.UUID, msg *Message, at time
 	c.updatedAt = &at
 	return nil
 }
+
+func (c *Conversation) AgentReadConversation(agentID uuid.UUID, at time.Time) error {
+	if c.agentID == nil || *c.agentID != agentID {
+		return ErrConversationAgentNotOwner
+	}
+
+	for _, msg := range c.found {
+		if msg.ContactID() != nil && msg.ReadAt() == nil {
+			msg.MarkAsRead(at)
+			c.dirty[msg.ID()] = msg
+		}
+	}
+
+	c.updatedAt = &at
+	return nil
+}

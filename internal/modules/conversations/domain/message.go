@@ -19,6 +19,7 @@ var (
 	ErrMessageTextTooLong          = errors.New("message text exceeds maximum length")
 	ErrMessageExternalIDInvalid    = errors.New("message external identifier is invalid")
 	ErrMessageExternalIDAlreadySet = errors.New("message external identifier is already assigned")
+	ErrMessageInvalidOwner         = errors.New("message must have exactly one owner (agent or contact)")
 )
 
 type Message struct {
@@ -49,6 +50,10 @@ func NewMessage(
 ) (*Message, error) {
 	if id == uuid.Nil() {
 		return nil, ErrMessageInvalidID
+	}
+
+	if (agentID == nil && contactID == nil) || (agentID != nil && contactID != nil) {
+		return nil, ErrMessageInvalidOwner
 	}
 
 	if msgType == MessageTypeText {
@@ -103,4 +108,9 @@ func (m *Message) AssignExternalID(id string) error {
 
 	m.externalID = &id
 	return nil
+}
+
+func (m *Message) MarkAsRead(at time.Time) {
+	m.readAt = &at
+	m.status = MessageStatusRead
 }
