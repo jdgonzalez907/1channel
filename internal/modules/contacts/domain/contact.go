@@ -26,6 +26,10 @@ func NewContact(id uuid.UUID, externalContactID string, createdAt time.Time) (*C
 	return &Contact{id: id, externalContactID: externalContactID, createdAt: createdAt}, nil
 }
 
+func RehydrateContact(id uuid.UUID, externalContactID string, createdAt time.Time) *Contact {
+	return &Contact{id: id, externalContactID: externalContactID, createdAt: createdAt}
+}
+
 func (c *Contact) ID() uuid.UUID             { return c.id }
 func (c *Contact) ExternalContactID() string { return c.externalContactID }
 func (c *Contact) CreatedAt() time.Time      { return c.createdAt }

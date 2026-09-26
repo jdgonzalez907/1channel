@@ -18,3 +18,12 @@ El módulo de agentes SHALL exponer en su raíz una interfaz `AgentsAPI` con los
 
 - **WHEN** un módulo solicita un agente por su identificador y el agente no existe
 - **THEN** la API retorna error de agente no encontrado
+
+### Requirement: Rehidratar agente
+
+El módulo de agentes SHALL permitir reconstruir un agente a partir de datos persistidos sin validar sus invariantes. La rehidratación SHALL ser distinta de la creación.
+
+#### Scenario: Rehidratar agente
+
+- **WHEN** se rehidrata un agente con identificador y fecha de creación
+- **THEN** se obtiene el agente con esos valores

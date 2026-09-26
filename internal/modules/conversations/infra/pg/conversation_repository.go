@@ -12,15 +12,15 @@ import (
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb/sqlc"
 )
 
-type conversationRepository struct {
+type postgresConversationRepository struct {
 	db *pgdb.DB
 }
 
 func NewConversationRepository(db *pgdb.DB) domain.ConversationRepository {
-	return &conversationRepository{db: db}
+	return &postgresConversationRepository{db: db}
 }
 
-func (r *conversationRepository) FindWithoutMessages(ctx context.Context, id uuid.UUID) (*domain.Conversation, error) {
+func (r *postgresConversationRepository) FindWithoutMessages(ctx context.Context, id uuid.UUID) (*domain.Conversation, error) {
 	row, err := r.db.Queries.FindConversationWithoutMessages(ctx, pgdb.UUID(id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -30,10 +30,10 @@ func (r *conversationRepository) FindWithoutMessages(ctx context.Context, id uui
 		return nil, err
 	}
 
-	return toConversation(row, nil)
+	return toConversation(row, nil), nil
 }
 
-func (r *conversationRepository) FindOpenWithMessageExternalIDsByContactID(ctx context.Context, contactID uuid.UUID) (*domain.Conversation, error) {
+func (r *postgresConversationRepository) FindOpenWithMessageExternalIDsByContactID(ctx context.Context, contactID uuid.UUID) (*domain.Conversation, error) {
 	row, err := r.db.Queries.FindOpenConversationWithMessageExternalIDsByContactID(ctx, pgdb.UUID(contactID))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -48,15 +48,10 @@ func (r *conversationRepository) FindOpenWithMessageExternalIDsByContactID(ctx c
 		return nil, err
 	}
 
-	messages, err := toMessages(messageRows)
-	if err != nil {
-		return nil, err
-	}
-
-	return toConversation(row, messages)
+	return toConversation(row, toMessages(messageRows)), nil
 }
 
-func (r *conversationRepository) FindWithContactUnreadMessagesByID(ctx context.Context, id uuid.UUID) (*domain.Conversation, error) {
+func (r *postgresConversationRepository) FindWithContactUnreadMessagesByID(ctx context.Context, id uuid.UUID) (*domain.Conversation, error) {
 	row, err := r.db.Queries.FindConversationWithContactUnreadMessagesByID(ctx, pgdb.UUID(id))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -71,15 +66,10 @@ func (r *conversationRepository) FindWithContactUnreadMessagesByID(ctx context.C
 		return nil, err
 	}
 
-	messages, err := toMessages(messageRows)
-	if err != nil {
-		return nil, err
-	}
-
-	return toConversation(row, messages)
+	return toConversation(row, toMessages(messageRows)), nil
 }
 
-func (r *conversationRepository) FindWithMessageByExternalID(ctx context.Context, externalMessageID string) (*domain.Conversation, error) {
+func (r *postgresConversationRepository) FindWithMessageByExternalID(ctx context.Context, externalMessageID string) (*domain.Conversation, error) {
 	messageRow, err := r.db.Queries.FindMessageByExternalID(ctx, &externalMessageID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -98,15 +88,10 @@ func (r *conversationRepository) FindWithMessageByExternalID(ctx context.Context
 		return nil, err
 	}
 
-	message, err := toMessage(messageRow)
-	if err != nil {
-		return nil, err
-	}
-
-	return toConversation(conversationRow, []*domain.Message{message})
+	return toConversation(conversationRow, []*domain.Message{toMessage(messageRow)}), nil
 }
 
-func (r *conversationRepository) Save(ctx context.Context, conversation *domain.Conversation) error {
+func (r *postgresConversationRepository) Save(ctx context.Context, conversation *domain.Conversation) error {
 	return r.db.InTx(ctx, func(q *sqlc.Queries) error {
 		if err := q.UpsertConversation(ctx, sqlc.UpsertConversationParams{
 			ID:         pgdb.UUID(conversation.ID()),
@@ -130,53 +115,33 @@ func (r *conversationRepository) Save(ctx context.Context, conversation *domain.
 	})
 }
 
-func toConversation(row sqlc.Conversation, messages []*domain.Message) (*domain.Conversation, error) {
-	status, err := domain.NewConversationStatus(row.Status)
-	if err != nil {
-		return nil, err
-	}
-
+func toConversation(row sqlc.Conversation, messages []*domain.Message) *domain.Conversation {
 	return domain.RehydrateConversation(
 		pgdb.FromUUID(row.ID),
-		status,
+		domain.ConversationStatus(row.Status),
 		messages,
 		pgdb.FromUUIDPtr(row.AgentID),
 		pgdb.FromUUIDPtr(row.ContactID),
 		pgdb.FromTimestamp(row.CreatedAt),
 		pgdb.FromTimestampPtr(row.UpdatedAt),
 		pgdb.FromTimestampPtr(row.FinishedAt),
-	), nil
+	)
 }
 
-func toMessages(rows []sqlc.Message) ([]*domain.Message, error) {
+func toMessages(rows []sqlc.Message) []*domain.Message {
 	messages := make([]*domain.Message, 0, len(rows))
 	for _, row := range rows {
-		message, err := toMessage(row)
-		if err != nil {
-			return nil, err
-		}
-
-		messages = append(messages, message)
+		messages = append(messages, toMessage(row))
 	}
 
-	return messages, nil
+	return messages
 }
 
-func toMessage(row sqlc.Message) (*domain.Message, error) {
-	status, err := domain.NewMessageStatus(row.Status)
-	if err != nil {
-		return nil, err
-	}
-
-	messageType, err := domain.NewMessageType(row.Type)
-	if err != nil {
-		return nil, err
-	}
-
+func toMessage(row sqlc.Message) *domain.Message {
 	return domain.RehydrateMessage(
 		pgdb.FromUUID(row.ID),
-		status,
-		messageType,
+		domain.MessageStatus(row.Status),
+		domain.MessageType(row.Type),
 		row.Text,
 		pgdb.FromUUIDPtr(row.AgentID),
 		pgdb.FromUUIDPtr(row.ContactID),
@@ -185,7 +150,7 @@ func toMessage(row sqlc.Message) (*domain.Message, error) {
 		pgdb.FromTimestampPtr(row.ReadAt),
 		pgdb.FromTimestampPtr(row.EditedAt),
 		pgdb.FromTimestampPtr(row.DeletedAt),
-	), nil
+	)
 }
 
 func toUpsertMessageParams(message *domain.Message, conversationID uuid.UUID) sqlc.UpsertMessageParams {

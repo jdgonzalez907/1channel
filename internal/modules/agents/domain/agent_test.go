@@ -37,3 +37,15 @@ func TestNewAgent(t *testing.T) {
 		})
 	}
 }
+
+func TestRehydrateAgent(t *testing.T) {
+	id := uuid.NewV7()
+	now := time.Now()
+
+	// Act
+	agent := RehydrateAgent(id, now)
+
+	// Assert
+	assert.Equal(t, id, agent.ID())
+	assert.Equal(t, now, agent.CreatedAt())
+}
