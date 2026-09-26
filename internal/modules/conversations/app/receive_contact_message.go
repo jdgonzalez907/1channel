@@ -59,7 +59,7 @@ func (uc *receiveContactMessage) Execute(ctx context.Context, input ReceiveConta
 		return uc.joinErr(err)
 	}
 
-	conversation, err := uc.conversationRepository.FindOpenByContactID(ctx, contactID)
+	conversation, err := uc.conversationRepository.FindOpenWithMessageExternalIDsByContactID(ctx, contactID)
 	if err != nil {
 		return uc.joinErr(err)
 	}

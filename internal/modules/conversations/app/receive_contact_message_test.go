@@ -39,7 +39,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusPending, nil, &contactID, nil)
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(conv, nil).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				return conv
 			},
@@ -56,7 +56,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 			setup: func(t *testing.T, repo *domain.MockConversationRepository, contactsAPI *contacts.MockContactsAPI) *domain.Conversation {
 				t.Helper()
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(nil, nil).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(nil, nil).Once()
 				repo.On("Save", mock.Anything, mock.MatchedBy(func(c *domain.Conversation) bool {
 					return c.Status() == domain.ConversationStatusPending &&
 						c.ContactID() != nil && *c.ContactID() == contactID &&
@@ -72,7 +72,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 				existing := buildContactMessage(t, uuid.NewV7(), contactID, strPtr(externalMessageID), nil)
 				conv := buildConversation(t, convID, domain.ConversationStatusPending, nil, &contactID, nil, existing)
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(conv, nil).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(conv, nil).Once()
 				return conv
 			},
 			check: func(t *testing.T, conv *domain.Conversation) {
@@ -86,7 +86,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusPending, nil, &otherContactID, nil)
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(conv, nil).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(conv, nil).Once()
 				return conv
 			},
 			wantErr: domain.ErrConversationContactNotOwner,
@@ -107,7 +107,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 			setup: func(t *testing.T, repo *domain.MockConversationRepository, contactsAPI *contacts.MockContactsAPI) *domain.Conversation {
 				t.Helper()
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(nil, nil).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(nil, nil).Once()
 				return nil
 			},
 			wantErr: domain.ErrConversationInvalidID,
@@ -126,7 +126,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 			setup: func(t *testing.T, repo *domain.MockConversationRepository, contactsAPI *contacts.MockContactsAPI) *domain.Conversation {
 				t.Helper()
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(nil, repoErr).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(nil, repoErr).Once()
 				return nil
 			},
 			wantErr: repoErr,
@@ -137,7 +137,7 @@ func TestReceiveContactMessage_Execute(t *testing.T) {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusPending, nil, &contactID, nil)
 				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
-				repo.On("FindOpenByContactID", mock.Anything, contactID).Return(conv, nil).Once()
+				repo.On("FindOpenWithMessageExternalIDsByContactID", mock.Anything, contactID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(repoErr).Once()
 				return conv
 			},

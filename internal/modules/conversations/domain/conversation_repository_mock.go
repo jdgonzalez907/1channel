@@ -33,7 +33,7 @@ func (m *MockConversationRepository) FindWithMessageByExternalID(ctx context.Con
 	return conversation, args.Error(1)
 }
 
-func (m *MockConversationRepository) FindOpenByContactID(ctx context.Context, contactID uuid.UUID) (*Conversation, error) {
+func (m *MockConversationRepository) FindOpenWithMessageExternalIDsByContactID(ctx context.Context, contactID uuid.UUID) (*Conversation, error) {
 	args := m.Called(ctx, contactID)
 
 	conversation, _ := args.Get(0).(*Conversation)

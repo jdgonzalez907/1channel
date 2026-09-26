@@ -61,7 +61,12 @@ func NewConversation(
 		return nil, ErrConversationFinishedAtMissing
 	}
 
-	return newConversation(id, status, messages, agentID, contactID, createdAt, updatedAt, finishedAt), nil
+	conversation := newConversation(id, status, messages, agentID, contactID, createdAt, updatedAt, finishedAt)
+	for _, message := range messages {
+		conversation.dirty[message.ID()] = message
+	}
+
+	return conversation, nil
 }
 
 func RehydrateConversation(
@@ -124,15 +129,28 @@ func (c *Conversation) Messages() []*Message {
 		msgs = append(msgs, msg)
 	}
 
-	sort.Slice(msgs, func(i, j int) bool {
-		if msgs[i].SentAt().Equal(msgs[j].SentAt()) {
-			return msgs[i].ID().Compare(msgs[j].ID()) < 0
-		}
-
-		return msgs[i].SentAt().Before(msgs[j].SentAt())
-	})
+	sort.Slice(msgs, func(i, j int) bool { return compareMessages(msgs[i], msgs[j]) })
 
 	return msgs
+}
+
+func (c *Conversation) DirtyMessages() []*Message {
+	msgs := make([]*Message, 0, len(c.dirty))
+	for _, msg := range c.dirty {
+		msgs = append(msgs, msg)
+	}
+
+	sort.Slice(msgs, func(i, j int) bool { return compareMessages(msgs[i], msgs[j]) })
+
+	return msgs
+}
+
+func compareMessages(a, b *Message) bool {
+	if a.SentAt().Equal(b.SentAt()) {
+		return a.ID().Compare(b.ID()) < 0
+	}
+
+	return a.SentAt().Before(b.SentAt())
 }
 
 func (c *Conversation) ensureAcceptsMessages(at time.Time) error {
