@@ -5,14 +5,14 @@ import (
 	"errors"
 	"testing"
 	"time"
-
 	"uuid"
 
-	"github.com/jdgonzalez907/1channel/internal/modules/agents"
-	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
-	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts"
+	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
+	"github.com/jdgonzalez907/1channel/internal/modules/users"
 )
 
 func TestSendAgentMessage_Execute(t *testing.T) {
@@ -33,16 +33,16 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 	tests := []struct {
 		name    string
 		text    *string
-		setup   func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation
+		setup   func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation
 		wantErr error
 		check   func(t *testing.T, conv *domain.Conversation)
 	}{
 		{
 			name: "sends message successfully",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Twice()
 				contactsAPI.On("FindExternalContactIDByContactID", mock.Anything, contactID).Return(externalContactID, nil).Once()
@@ -59,10 +59,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "claims pending conversation",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusPending, nil, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Twice()
 				contactsAPI.On("FindExternalContactIDByContactID", mock.Anything, contactID).Return(externalContactID, nil).Once()
@@ -77,10 +77,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "agent not owner",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &otherAgentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				return conv
 			},
@@ -88,10 +88,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "conversation not accepting messages",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusExpired, &agentID, &contactID, &finishedAt)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				return conv
 			},
@@ -99,10 +99,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "send failure marks message failed",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Twice()
 				contactsAPI.On("FindExternalContactIDByContactID", mock.Anything, contactID).Return(externalContactID, nil).Once()
@@ -117,9 +117,9 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "conversation not found",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(nil, nil).Once()
 				return nil
 			},
@@ -127,19 +127,19 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "agents api error",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(uuid.Nil(), agentsErr).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(uuid.Nil(), agentsErr).Once()
 				return nil
 			},
 			wantErr: agentsErr,
 		},
 		{
 			name: "contacts api error",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				contactsAPI.On("FindExternalContactIDByContactID", mock.Anything, contactID).Return("", contactsErr).Once()
@@ -149,9 +149,9 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "find error",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(nil, repoErr).Once()
 				return nil
 			},
@@ -160,10 +160,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		{
 			name: "invalid message text",
 			text: strPtr(""),
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				return conv
 			},
@@ -171,10 +171,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "conversation without contact",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, nil, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				return conv
@@ -183,10 +183,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "send failure and failed save after marking failed",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(repoErr).Once()
@@ -198,10 +198,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "save error after assigning external id",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(repoErr).Once()
@@ -217,10 +217,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "sender returns empty external id",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				contactsAPI.On("FindExternalContactIDByContactID", mock.Anything, contactID).Return(externalContactID, nil).Once()
@@ -231,10 +231,10 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		},
 		{
 			name: "save error",
-			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *agents.MockAgentsAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
+			setup: func(t *testing.T, repo *domain.MockConversationRepository, agentsAPI *users.MockUsersAPI, contactsAPI *contacts.MockContactsAPI, sender *domain.MockAgentMessageSender) *domain.Conversation {
 				t.Helper()
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil)
-				agentsAPI.On("FindAgentByID", mock.Anything, agentID).Return(agentID, nil).Once()
+				agentsAPI.On("FindUserByID", mock.Anything, agentID).Return(agentID, nil).Once()
 				repo.On("FindWithoutMessages", mock.Anything, convID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(repoErr).Once()
 				return conv
@@ -247,7 +247,7 @@ func TestSendAgentMessage_Execute(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Arrange
 			repo := &domain.MockConversationRepository{}
-			agentsAPI := &agents.MockAgentsAPI{}
+			agentsAPI := &users.MockUsersAPI{}
 			contactsAPI := &contacts.MockContactsAPI{}
 			sender := &domain.MockAgentMessageSender{}
 			conv := tt.setup(t, repo, agentsAPI, contactsAPI, sender)

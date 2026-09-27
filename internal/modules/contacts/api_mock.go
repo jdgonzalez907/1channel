@@ -2,7 +2,6 @@ package contacts
 
 import (
 	"context"
-
 	"uuid"
 
 	"github.com/stretchr/testify/mock"

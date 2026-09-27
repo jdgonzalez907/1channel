@@ -3,10 +3,10 @@ package pg
 import (
 	"context"
 	"errors"
-
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/jdgonzalez907/1channel/internal/modules/contacts/domain"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb/sqlc"

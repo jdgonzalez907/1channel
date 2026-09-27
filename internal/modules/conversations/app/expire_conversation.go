@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
 	"uuid"
 
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"

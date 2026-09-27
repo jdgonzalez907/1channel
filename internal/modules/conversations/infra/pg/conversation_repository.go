@@ -3,10 +3,10 @@ package pg
 import (
 	"context"
 	"errors"
-
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb/sqlc"
@@ -96,7 +96,7 @@ func (r *postgresConversationRepository) Save(ctx context.Context, conversation 
 		if err := q.UpsertConversation(ctx, sqlc.UpsertConversationParams{
 			ID:         pgdb.UUID(conversation.ID()),
 			Status:     conversation.Status().String(),
-			AgentID:    pgdb.UUIDPtr(conversation.AgentID()),
+			UserID:     pgdb.UUIDPtr(conversation.AgentID()),
 			ContactID:  pgdb.UUIDPtr(conversation.ContactID()),
 			CreatedAt:  pgdb.Timestamp(conversation.CreatedAt()),
 			UpdatedAt:  pgdb.TimestampPtr(conversation.UpdatedAt()),
@@ -120,7 +120,7 @@ func toConversation(row sqlc.Conversation, messages []*domain.Message) *domain.C
 		pgdb.FromUUID(row.ID),
 		domain.ConversationStatus(row.Status),
 		messages,
-		pgdb.FromUUIDPtr(row.AgentID),
+		pgdb.FromUUIDPtr(row.UserID),
 		pgdb.FromUUIDPtr(row.ContactID),
 		pgdb.FromTimestamp(row.CreatedAt),
 		pgdb.FromTimestampPtr(row.UpdatedAt),
@@ -143,7 +143,7 @@ func toMessage(row sqlc.Message) *domain.Message {
 		domain.MessageStatus(row.Status),
 		domain.MessageType(row.Type),
 		row.Text,
-		pgdb.FromUUIDPtr(row.AgentID),
+		pgdb.FromUUIDPtr(row.UserID),
 		pgdb.FromUUIDPtr(row.ContactID),
 		row.ExternalID,
 		pgdb.FromTimestamp(row.SentAt),
@@ -160,7 +160,7 @@ func toUpsertMessageParams(message *domain.Message, conversationID uuid.UUID) sq
 		Status:         message.Status().String(),
 		Type:           message.Type().String(),
 		Text:           message.Text(),
-		AgentID:        pgdb.UUIDPtr(message.AgentID()),
+		UserID:         pgdb.UUIDPtr(message.AgentID()),
 		ContactID:      pgdb.UUIDPtr(message.ContactID()),
 		ExternalID:     message.ExternalID(),
 		SentAt:         pgdb.Timestamp(message.SentAt()),

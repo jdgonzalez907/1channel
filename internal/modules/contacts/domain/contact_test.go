@@ -3,7 +3,6 @@ package domain
 import (
 	"testing"
 	"time"
-
 	"uuid"
 
 	"github.com/stretchr/testify/assert"

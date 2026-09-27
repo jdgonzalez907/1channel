@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-
 	"uuid"
 
 	"github.com/stretchr/testify/mock"

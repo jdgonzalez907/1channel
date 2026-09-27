@@ -8,11 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Agent struct {
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-}
-
 type Contact struct {
 	ID                pgtype.UUID        `json:"id"`
 	ExternalContactID string             `json:"external_contact_id"`
@@ -22,7 +17,7 @@ type Contact struct {
 type Conversation struct {
 	ID         pgtype.UUID        `json:"id"`
 	Status     string             `json:"status"`
-	AgentID    pgtype.UUID        `json:"agent_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
 	ContactID  pgtype.UUID        `json:"contact_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
@@ -35,11 +30,16 @@ type Message struct {
 	Status         string             `json:"status"`
 	Type           string             `json:"type"`
 	Text           *string            `json:"text"`
-	AgentID        pgtype.UUID        `json:"agent_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
 	ContactID      pgtype.UUID        `json:"contact_id"`
 	ExternalID     *string            `json:"external_id"`
 	SentAt         pgtype.Timestamptz `json:"sent_at"`
 	ReadAt         pgtype.Timestamptz `json:"read_at"`
 	EditedAt       pgtype.Timestamptz `json:"edited_at"`
 	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type User struct {
+	ID        pgtype.UUID        `json:"id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }

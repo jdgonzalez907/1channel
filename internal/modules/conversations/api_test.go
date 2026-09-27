@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 	"time"
-
 	"uuid"
 
-	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 )
 
 type apiMocks struct {

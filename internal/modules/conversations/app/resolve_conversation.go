@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"time"
-
 	"uuid"
 
-	"github.com/jdgonzalez907/1channel/internal/modules/agents"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
+	"github.com/jdgonzalez907/1channel/internal/modules/users"
 )
 
 var ErrResolvingConversation = errors.New("resolving conversation failed")
@@ -25,15 +24,15 @@ type ResolveConversation interface {
 
 type resolveConversation struct {
 	conversationRepository domain.ConversationRepository
-	agentsAPI              agents.AgentsAPI
+	usersAPI               users.UsersAPI
 }
 
-func NewResolveConversation(conversationRepository domain.ConversationRepository, agentsAPI agents.AgentsAPI) ResolveConversation {
-	return &resolveConversation{conversationRepository: conversationRepository, agentsAPI: agentsAPI}
+func NewResolveConversation(conversationRepository domain.ConversationRepository, usersAPI users.UsersAPI) ResolveConversation {
+	return &resolveConversation{conversationRepository: conversationRepository, usersAPI: usersAPI}
 }
 
 func (uc *resolveConversation) Execute(ctx context.Context, input ResolveConversationInput) error {
-	agentID, err := uc.agentsAPI.FindAgentByID(ctx, input.AgentID)
+	agentID, err := uc.usersAPI.FindUserByID(ctx, input.AgentID)
 	if err != nil {
 		return uc.joinErr(err)
 	}

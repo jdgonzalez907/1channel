@@ -4,7 +4,7 @@ CREATE TABLE messages (
     status text NOT NULL,
     type text NOT NULL,
     text text,
-    agent_id uuid,
+    user_id uuid,
     contact_id uuid,
     external_id text,
     sent_at timestamptz NOT NULL,
@@ -13,8 +13,8 @@ CREATE TABLE messages (
     deleted_at timestamptz,
     CONSTRAINT messages_conversation_id_fkey FOREIGN KEY (conversation_id)
         REFERENCES conversations (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
-    CONSTRAINT messages_agent_id_fkey FOREIGN KEY (agent_id)
-        REFERENCES agents (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT messages_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES users (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT messages_contact_id_fkey FOREIGN KEY (contact_id)
         REFERENCES contacts (id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT messages_status_check CHECK (
@@ -22,7 +22,7 @@ CREATE TABLE messages (
     ),
     CONSTRAINT messages_type_check CHECK (type IN ('text')),
     CONSTRAINT messages_owner_check CHECK (
-        (agent_id IS NULL) <> (contact_id IS NULL)
+        (user_id IS NULL) <> (contact_id IS NULL)
     )
 );
 

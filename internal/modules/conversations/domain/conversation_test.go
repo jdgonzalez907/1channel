@@ -3,7 +3,6 @@ package domain
 import (
 	"testing"
 	"time"
-
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
@@ -200,7 +199,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
 				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-				msg.AssignExternalID("wa-002")
+				_ = msg.AssignExternalID("wa-002")
 				return msg
 			},
 			receiveFrom: contactID,
@@ -241,7 +240,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
 				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-				msg.AssignExternalID("wa-001")
+				_ = msg.AssignExternalID("wa-001")
 				return msg
 			},
 			receiveFrom: contactID,
@@ -268,7 +267,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 			contactID:  &contactID,
 			newMsgFunc: func() *Message {
 				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-				msg.AssignExternalID("wa-002")
+				_ = msg.AssignExternalID("wa-002")
 				return msg
 			},
 			receiveFrom: contactID,
@@ -323,7 +322,7 @@ func TestConversation_ReceiveContactMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			existingMsg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-			existingMsg.AssignExternalID("wa-001")
+			_ = existingMsg.AssignExternalID("wa-001")
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{existingMsg}, tt.agentID, tt.contactID, now, nil, tt.finishedAt)
 
 			newMsg := tt.newMsgFunc()
@@ -414,7 +413,7 @@ func TestConversation_SendAgentMessage(t *testing.T) {
 			agentID:    &agentID,
 			newMsgFunc: func() *Message {
 				msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
-				msg.AssignExternalID("wa-agent-001")
+				_ = msg.AssignExternalID("wa-agent-001")
 				return msg
 			},
 			sendAgent:  agentID,
@@ -959,9 +958,9 @@ func TestConversation_ReceiveContactMessageEdit(t *testing.T) {
 			}
 
 			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-			contactMsg.AssignExternalID(contactExternalID)
+			_ = contactMsg.AssignExternalID(contactExternalID)
 			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
-			agentMsg.AssignExternalID(agentExternalID)
+			_ = agentMsg.AssignExternalID(agentExternalID)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
 			// Act
@@ -1059,9 +1058,9 @@ func TestConversation_ReceiveContactMessageDelete(t *testing.T) {
 			}
 
 			contactMsg, _ := NewMessage(contactMsgID, status, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-			contactMsg.AssignExternalID(contactExternalID)
+			_ = contactMsg.AssignExternalID(contactExternalID)
 			agentMsg, _ := NewMessage(agentMsgID, MessageStatusSent, MessageTypeText, &text, &agentID, nil, nil, now, nil, nil, nil)
-			agentMsg.AssignExternalID(agentExternalID)
+			_ = agentMsg.AssignExternalID(agentExternalID)
 			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
 
 			// Act
@@ -1091,9 +1090,9 @@ func TestConversation_ReceiveContactMessageEdit_DiscardsStaleEdit(t *testing.T) 
 	msgID := uuid.NewV7()
 
 	contactMsg, _ := NewMessage(msgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
-	contactMsg.AssignExternalID(externalID)
+	_ = contactMsg.AssignExternalID(externalID)
 	conv, _ := NewConversation(uuid.NewV7(), ConversationStatusAssigned, []*Message{contactMsg}, &agentID, &contactID, now, nil, nil)
-	conv.ReceiveContactMessageEdit(contactID, externalID, "newest", newestAt)
+	_ = conv.ReceiveContactMessageEdit(contactID, externalID, "newest", newestAt)
 
 	// Act
 	err := conv.ReceiveContactMessageEdit(contactID, externalID, "stale", now)

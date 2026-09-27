@@ -12,7 +12,7 @@ import (
 )
 
 const findMessageByExternalID = `-- name: FindMessageByExternalID :one
-SELECT id, conversation_id, status, type, text, agent_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
+SELECT id, conversation_id, status, type, text, user_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
 FROM messages
 WHERE external_id = $1
 `
@@ -26,7 +26,7 @@ func (q *Queries) FindMessageByExternalID(ctx context.Context, externalID *strin
 		&i.Status,
 		&i.Type,
 		&i.Text,
-		&i.AgentID,
+		&i.UserID,
 		&i.ContactID,
 		&i.ExternalID,
 		&i.SentAt,
@@ -38,7 +38,7 @@ func (q *Queries) FindMessageByExternalID(ctx context.Context, externalID *strin
 }
 
 const listMessagesWithExternalIDByConversation = `-- name: ListMessagesWithExternalIDByConversation :many
-SELECT id, conversation_id, status, type, text, agent_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
+SELECT id, conversation_id, status, type, text, user_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
 FROM messages
 WHERE conversation_id = $1
   AND external_id IS NOT NULL
@@ -60,7 +60,7 @@ func (q *Queries) ListMessagesWithExternalIDByConversation(ctx context.Context, 
 			&i.Status,
 			&i.Type,
 			&i.Text,
-			&i.AgentID,
+			&i.UserID,
 			&i.ContactID,
 			&i.ExternalID,
 			&i.SentAt,
@@ -79,7 +79,7 @@ func (q *Queries) ListMessagesWithExternalIDByConversation(ctx context.Context, 
 }
 
 const listUnreadContactMessagesByConversation = `-- name: ListUnreadContactMessagesByConversation :many
-SELECT id, conversation_id, status, type, text, agent_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
+SELECT id, conversation_id, status, type, text, user_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
 FROM messages
 WHERE conversation_id = $1
   AND contact_id IS NOT NULL
@@ -102,7 +102,7 @@ func (q *Queries) ListUnreadContactMessagesByConversation(ctx context.Context, c
 			&i.Status,
 			&i.Type,
 			&i.Text,
-			&i.AgentID,
+			&i.UserID,
 			&i.ContactID,
 			&i.ExternalID,
 			&i.SentAt,
@@ -121,13 +121,13 @@ func (q *Queries) ListUnreadContactMessagesByConversation(ctx context.Context, c
 }
 
 const upsertMessage = `-- name: UpsertMessage :exec
-INSERT INTO messages (id, conversation_id, status, type, text, agent_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at)
+INSERT INTO messages (id, conversation_id, status, type, text, user_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (id) DO UPDATE SET
     status = EXCLUDED.status,
     type = EXCLUDED.type,
     text = EXCLUDED.text,
-    agent_id = EXCLUDED.agent_id,
+    user_id = EXCLUDED.user_id,
     contact_id = EXCLUDED.contact_id,
     external_id = EXCLUDED.external_id,
     sent_at = EXCLUDED.sent_at,
@@ -142,7 +142,7 @@ type UpsertMessageParams struct {
 	Status         string             `json:"status"`
 	Type           string             `json:"type"`
 	Text           *string            `json:"text"`
-	AgentID        pgtype.UUID        `json:"agent_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
 	ContactID      pgtype.UUID        `json:"contact_id"`
 	ExternalID     *string            `json:"external_id"`
 	SentAt         pgtype.Timestamptz `json:"sent_at"`
@@ -158,7 +158,7 @@ func (q *Queries) UpsertMessage(ctx context.Context, arg UpsertMessageParams) er
 		arg.Status,
 		arg.Type,
 		arg.Text,
-		arg.AgentID,
+		arg.UserID,
 		arg.ContactID,
 		arg.ExternalID,
 		arg.SentAt,

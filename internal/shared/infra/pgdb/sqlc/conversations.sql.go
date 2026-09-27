@@ -12,7 +12,7 @@ import (
 )
 
 const findConversationWithContactUnreadMessagesByID = `-- name: FindConversationWithContactUnreadMessagesByID :one
-SELECT id, status, agent_id, contact_id, created_at, updated_at, finished_at
+SELECT id, status, user_id, contact_id, created_at, updated_at, finished_at
 FROM conversations
 WHERE id = $1
 `
@@ -23,7 +23,7 @@ func (q *Queries) FindConversationWithContactUnreadMessagesByID(ctx context.Cont
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
-		&i.AgentID,
+		&i.UserID,
 		&i.ContactID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -33,7 +33,7 @@ func (q *Queries) FindConversationWithContactUnreadMessagesByID(ctx context.Cont
 }
 
 const findConversationWithoutMessages = `-- name: FindConversationWithoutMessages :one
-SELECT id, status, agent_id, contact_id, created_at, updated_at, finished_at
+SELECT id, status, user_id, contact_id, created_at, updated_at, finished_at
 FROM conversations
 WHERE id = $1
 `
@@ -44,7 +44,7 @@ func (q *Queries) FindConversationWithoutMessages(ctx context.Context, id pgtype
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
-		&i.AgentID,
+		&i.UserID,
 		&i.ContactID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -54,7 +54,7 @@ func (q *Queries) FindConversationWithoutMessages(ctx context.Context, id pgtype
 }
 
 const findOpenConversationWithMessageExternalIDsByContactID = `-- name: FindOpenConversationWithMessageExternalIDsByContactID :one
-SELECT id, status, agent_id, contact_id, created_at, updated_at, finished_at
+SELECT id, status, user_id, contact_id, created_at, updated_at, finished_at
 FROM conversations
 WHERE contact_id = $1
   AND status IN ('pending', 'assigned')
@@ -67,7 +67,7 @@ func (q *Queries) FindOpenConversationWithMessageExternalIDsByContactID(ctx cont
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
-		&i.AgentID,
+		&i.UserID,
 		&i.ContactID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -77,11 +77,11 @@ func (q *Queries) FindOpenConversationWithMessageExternalIDsByContactID(ctx cont
 }
 
 const upsertConversation = `-- name: UpsertConversation :exec
-INSERT INTO conversations (id, status, agent_id, contact_id, created_at, updated_at, finished_at)
+INSERT INTO conversations (id, status, user_id, contact_id, created_at, updated_at, finished_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (id) DO UPDATE SET
     status = EXCLUDED.status,
-    agent_id = EXCLUDED.agent_id,
+    user_id = EXCLUDED.user_id,
     contact_id = EXCLUDED.contact_id,
     updated_at = EXCLUDED.updated_at,
     finished_at = EXCLUDED.finished_at
@@ -90,7 +90,7 @@ ON CONFLICT (id) DO UPDATE SET
 type UpsertConversationParams struct {
 	ID         pgtype.UUID        `json:"id"`
 	Status     string             `json:"status"`
-	AgentID    pgtype.UUID        `json:"agent_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
 	ContactID  pgtype.UUID        `json:"contact_id"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
@@ -101,7 +101,7 @@ func (q *Queries) UpsertConversation(ctx context.Context, arg UpsertConversation
 	_, err := q.db.Exec(ctx, upsertConversation,
 		arg.ID,
 		arg.Status,
-		arg.AgentID,
+		arg.UserID,
 		arg.ContactID,
 		arg.CreatedAt,
 		arg.UpdatedAt,

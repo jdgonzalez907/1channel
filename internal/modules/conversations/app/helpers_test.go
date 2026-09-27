@@ -3,11 +3,11 @@ package app
 import (
 	"testing"
 	"time"
-
 	"uuid"
 
-	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 	"github.com/stretchr/testify/require"
+
+	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 )
 
 func buildConversation(

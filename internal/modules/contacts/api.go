@@ -3,7 +3,6 @@ package contacts
 import (
 	"context"
 	"time"
-
 	"uuid"
 
 	"github.com/jdgonzalez907/1channel/internal/modules/contacts/app"

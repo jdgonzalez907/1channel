@@ -4,11 +4,10 @@ import (
 	"context"
 	"errors"
 	"time"
-
 	"uuid"
 
-	"github.com/jdgonzalez907/1channel/internal/modules/agents"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
+	"github.com/jdgonzalez907/1channel/internal/modules/users"
 )
 
 var ErrAgentReadingConversation = errors.New("agent reading conversation failed")
@@ -25,15 +24,15 @@ type AgentReadConversation interface {
 
 type agentReadConversation struct {
 	conversationRepository domain.ConversationRepository
-	agentsAPI              agents.AgentsAPI
+	usersAPI               users.UsersAPI
 }
 
-func NewAgentReadConversation(conversationRepository domain.ConversationRepository, agentsAPI agents.AgentsAPI) AgentReadConversation {
-	return &agentReadConversation{conversationRepository: conversationRepository, agentsAPI: agentsAPI}
+func NewAgentReadConversation(conversationRepository domain.ConversationRepository, usersAPI users.UsersAPI) AgentReadConversation {
+	return &agentReadConversation{conversationRepository: conversationRepository, usersAPI: usersAPI}
 }
 
 func (uc *agentReadConversation) Execute(ctx context.Context, input AgentReadConversationInput) error {
-	agentID, err := uc.agentsAPI.FindAgentByID(ctx, input.AgentID)
+	agentID, err := uc.usersAPI.FindUserByID(ctx, input.AgentID)
 	if err != nil {
 		return uc.joinErr(err)
 	}

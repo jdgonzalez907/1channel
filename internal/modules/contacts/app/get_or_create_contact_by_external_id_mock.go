@@ -3,8 +3,9 @@ package app
 import (
 	"context"
 
-	"github.com/jdgonzalez907/1channel/internal/modules/contacts/domain"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/jdgonzalez907/1channel/internal/modules/contacts/domain"
 )
 
 type MockGetOrCreateContactByExternalID struct {

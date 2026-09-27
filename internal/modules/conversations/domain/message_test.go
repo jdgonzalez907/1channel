@@ -3,7 +3,6 @@ package domain
 import (
 	"testing"
 	"time"
-
 	"uuid"
 
 	"github.com/stretchr/testify/assert"
@@ -191,7 +190,7 @@ func TestMessage_AssignExternalID_AlreadyAssigned(t *testing.T) {
 	// Arrange
 	agentID := uuid.NewV7()
 	msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, nil, time.Now(), nil, nil, nil)
-	msg.AssignExternalID("wa-msg-001")
+	_ = msg.AssignExternalID("wa-msg-001")
 
 	// Act
 	err := msg.AssignExternalID("wa-msg-002")
@@ -489,7 +488,7 @@ func TestMessage_EditText_DiscardsStaleEdit(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, nil, now, nil, nil, nil)
-			msg.EditText("newest", newestAt)
+			_ = msg.EditText("newest", newestAt)
 
 			// Act
 			err := msg.EditText(tt.newText, tt.at)

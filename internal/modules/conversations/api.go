@@ -3,7 +3,6 @@ package conversations
 import (
 	"context"
 	"time"
-
 	"uuid"
 
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
