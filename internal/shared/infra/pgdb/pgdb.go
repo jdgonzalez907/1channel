@@ -2,9 +2,11 @@ package pgdb
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb/sqlc"
@@ -24,10 +26,23 @@ type DB struct {
 	Queries *sqlc.Queries
 }
 
+func configureUTC(m *pgtype.Map) {
+	m.RegisterType(&pgtype.Type{
+		Name:  "timestamptz",
+		OID:   pgtype.TimestamptzOID,
+		Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC},
+	})
+}
+
 func New(ctx context.Context, dsn string) (*DB, error) {
 	config, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
+	}
+
+	config.AfterConnect = func(_ context.Context, conn *pgx.Conn) error {
+		configureUTC(conn.TypeMap())
+		return nil
 	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)

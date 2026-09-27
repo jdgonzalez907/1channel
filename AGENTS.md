@@ -21,7 +21,7 @@
 ├── openspec/                   # Specification-driven development
 │   ├── specs/                  # Domain specifications
 │   └── changes/                # Change requests and archives
-├── docker-compose.yml          # Docker services (app + postgres)
+├── docker-compose.yml          # Docker services (postgres 18 + migrate)
 └── .github/workflows/          # CI/CD pipelines
 ```
 
@@ -32,8 +32,9 @@
 
 ### Key Technical Decisions
 - **Language**: Go 1.27
-- **Database**: PostgreSQL with SQLC for type-safe queries
-- **Migrations**: golang-migrate/migrate
+- **Database**: PostgreSQL 18 with SQLC for type-safe queries
+- **Migrations**: golang-migrate/migrate, applied on demand via `make migrate-up`
+- **Timestamps**: UTC end to end (Postgres `timezone=UTC`, pgx `ScanLocation=time.UTC`)
 - **Architecture**: Modular monolith with Clean Architecture layers
 - **API**: RESTful HTTP API (port 8080 by default)
 - **Containerization**: Docker + Docker Compose
@@ -41,22 +42,17 @@
 ## Development Commands
 
 ### Docker Environment
+Compose levanta solo datos; la app corre en el host con `go run` para iterar rapido.
+
 ```bash
-# Start services (app + postgres)
-docker compose up -d
-
-# Stop services
-docker compose down
-
-# View logs
-docker compose logs -f app
-
-# Shell into container
-docker compose exec app sh
-
-# Rebuild after changes
-docker compose up -d --build
+make up                    # Start postgres 18 (UTC) in background
+make down                  # Stop services
+docker compose ps          # Status and healthcheck
+docker compose logs -f postgres
+make migrate-up            # Apply migrations on demand
 ```
+
+Si `docker` pide permisos: `make DOCKER="sudo docker" up` (o agrega tu usuario al grupo `docker`).
 
 ### Essential Commands (inside container or local)
 ```bash
@@ -74,10 +70,10 @@ go test -race -count=1 ./...    # Run tests with race detection
 # Database (SQLC)
 sqlc generate                   # Generate Go code from SQL queries
 
-# Migrations (golang-migrate)
-migrate create -ext sql -dir db/migrations -seq migration_name
-migrate -path db/migrations -database "$POSTGRES_URL" up
-migrate -path db/migrations -database "$POSTGRES_URL" down
+# Migrations (golang-migrate, run on demand via Docker)
+make migrate-up
+make migrate-down
+make migrate-create NAME=migration_name
 ```
 
 ### Single Test Execution
@@ -89,34 +85,30 @@ go test -v -count=1 ./...      # Verbose output
 ## Environment Setup
 
 ### Required Environment Variables
-Copy `.env.example` to `.env` and configure:
+Copy `.env.example` to `.env`. The app does not load `.env` itself: `make run` sources it, and Docker Compose autoloads it for interpolation.
 
 ```bash
 # Application
 HTTP_PORT=8080
 LOG_LEVEL=debug
+TZ=UTC
 
-# Security
-ONECHANNEL_SECRET=your-secret
-META_SECRET=your-meta-secret
-
-# WhatsApp Business API
-WHATSAPP_PHONE_NUMBER_ID=your-phone-id
-WHATSAPP_ACCESS_TOKEN=your-access-token
-
-# Database (for Docker Compose)
-POSTGRES_HOST=postgres          # Service name in docker-compose
+# Database (local; the app runs on the host)
+POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=1channel_dev
 POSTGRES_USERNAME=dev
 POSTGRES_PASSWORD=dev
-POSTGRES_URL=postgres://dev:dev@postgres:5432/1channel_dev?sslmode=disable
 ```
 
+`POSTGRES_URL` is an optional DSN override; when set it takes precedence over the `POSTGRES_*` parts.
+
+Integration variables (`META_*`, `WHATSAPP_*`, `ONECHANNEL_SECRET`) are intentionally absent until the webhook and the real sender exist.
+
 ### Database Setup
-1. Start services: `docker compose up -d`
-2. Run migrations: `migrate -path db/migrations -database "$POSTGRES_URL" up`
-3. Generate SQLC code: `sqlc generate`
+1. Start PostgreSQL: `make up`
+2. Run migrations: `make migrate-up`
+3. Generate SQLC code: `sqlc generate` (requires `sqlc` installed)
 
 ## CI/CD Pipeline
 
@@ -287,9 +279,9 @@ go tool cover -html=coverage.out
 **Problem**: Application fails to start
 **Solution**: Ensure `.env` file exists with all required variables (see `.env.example`)
 
-### 5. Docker Networking
+### 5. Database Connectivity
 **Problem**: App can't connect to database
-**Solution**: Use Docker service name (`postgres`) as host, not `localhost`
+**Solution**: On the host use `POSTGRES_HOST=localhost`; the service name `postgres` is only valid inside the Compose network (for example, for the `migrate` service).
 
 ## Working with OpenSpec
 
@@ -306,11 +298,12 @@ This project uses OpenSpec for specification-driven development:
 
 ## Quick Reference
 
-### Build & Run (Docker)
+### Build & Run
 ```bash
-docker compose up -d            # Start services
-docker compose logs -f app      # View logs
-docker compose down             # Stop services
+make up                         # Start postgres 18 (UTC)
+make migrate-up                 # Apply migrations
+make run                        # go run ./cmd/api, sourcing .env (TZ=UTC)
+make down                       # Stop services
 ```
 
 ### Quality Gates (run before push)
@@ -320,13 +313,11 @@ go mod verify && gofmt -l . && go vet ./... && go build ./... && go test -race -
 
 ### Database
 ```bash
-# Run migrations
-migrate -path db/migrations -database "$POSTGRES_URL" up
+make migrate-up                 # Apply migrations
+make migrate-down               # Roll back one migration
+make migrate-create NAME=name   # Create a new migration pair
 
-# Create migration
-migrate create -ext sql -dir db/migrations -seq migration_name
-
-# Generate SQLC code
+# Generate SQLC code (requires sqlc installed)
 sqlc generate
 ```
 
@@ -344,14 +335,15 @@ git checkout -b hotfix/name main
 
 ## Important Notes
 
-- **Never commit `.env` files** - they're in `.gitignore`
+- **Never commit `.env` files** - `.env` and `.env.*` are in `.gitignore` (only `.env.example` is tracked)
 - **Always run quality gates locally** before pushing
 - **SQLC generates code** - don't edit generated files manually
 - **Follow Clean Architecture** - respect layer boundaries
 - **Use OpenSpec** for feature specifications and change management
-- **Run migrations** before starting the application
-- **Use Docker service names** for inter-container communication
+- **Run `make migrate-up`** before starting the application with `make run`
+- **App runs on the host** against `localhost`; `postgres` is the Compose-internal service name
+- **Timestamps are UTC**: Postgres runs `timezone=UTC` and pgx decodes `timestamptz` as UTC
 
 ---
 
-*This guide is maintained for AI agents working on the 1Channel project. Last updated: 2026-09-24*
+*This guide is maintained for AI agents working on the 1Channel project. Last updated: 2026-09-27*
