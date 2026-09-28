@@ -1,29 +1,6 @@
-# http-read-api Specification
+# Spec Delta
 
-## Purpose
-
-Contrato REST de lectura para que un agente autenticado consulte la bandeja de conversaciones, abra una conversación con su historial y consulte contactos y usuarios por identificador.
-
-## Requirements
-
-### Requirement: Identidad del solicitante en lecturas
-
-Las solicitudes a los endpoints de lectura SHALL obtener la identidad del usuario desde el encabezado `Authorization: Bearer <id>`. El sistema SHALL rechazar con 401 las solicitudes sin encabezado, con un valor no parseable o cuyo usuario no exista.
-
-#### Scenario: Lectura autenticada
-
-- **WHEN** llega una lectura con `Authorization: Bearer <uuid>` de un usuario existente
-- **THEN** la operación se ejecuta con la identidad de ese usuario
-
-#### Scenario: Falta el encabezado
-
-- **WHEN** llega una lectura sin encabezado `Authorization`
-- **THEN** el sistema responde 401
-
-#### Scenario: Bearer no parseable o inexistente
-
-- **WHEN** llega una lectura con un Bearer que no es un identificador válido o cuyo usuario no existe
-- **THEN** el sistema responde 401
+## MODIFIED Requirements
 
 ### Requirement: Listar la bandeja de conversaciones
 
@@ -122,48 +99,6 @@ El sistema SHALL exponer `GET /v1/conversations/{id}` para obtener una conversac
 
 - **WHEN** el historial incluye un mensaje eliminado
 - **THEN** el mensaje aparece con estado `deleted` y su texto es nulo
-
-### Requirement: Consultar un contacto por identificador
-
-El sistema SHALL exponer `GET /v1/contacts/{id}` para que un agente autenticado obtenga un contacto por su identificador. La respuesta exitosa SHALL ser 200 con el identificador, el identificador externo y la fecha de creación. Si el `id` no es válido SHALL responder 400 y si el contacto no existe SHALL responder 404.
-
-#### Scenario: Contacto existente
-
-- **WHEN** el agente consulta un contacto existente
-- **THEN** el sistema responde 200 con su identificador, identificador externo y fecha de creación
-
-#### Scenario: Contacto inexistente o identificador inválido
-
-- **WHEN** el agente consulta un contacto que no existe o con un `id` inválido
-- **THEN** el sistema responde 404 o 400 respectivamente
-
-### Requirement: Consultar un usuario por identificador
-
-El sistema SHALL exponer `GET /v1/users/{id}` para que un agente autenticado obtenga un usuario por su identificador. La respuesta exitosa SHALL ser 200 con el identificador y la fecha de creación. Si el `id` no es válido SHALL responder 400 y si el usuario no existe SHALL responder 404.
-
-#### Scenario: Usuario existente
-
-- **WHEN** el agente consulta un usuario existente
-- **THEN** el sistema responde 200 con su identificador y fecha de creación
-
-#### Scenario: Usuario inexistente o identificador inválido
-
-- **WHEN** el agente consulta un usuario que no existe o con un `id` inválido
-- **THEN** el sistema responde 404 o 400 respectivamente
-
-### Requirement: Paginación por posición
-
-El sistema SHALL paginar las lecturas de conversaciones y de mensajes mediante los parámetros `before_sent_at` (instante RFC 3339) y `before_id` (identificador). Ambos SHALL ser opcionales y SHALL enviarse juntos; enviar solo uno SHALL rechazarse con 400, y un valor no parseable SHALL rechazarse con 400. El sistema SHALL exponer en cada respuesta paginada `next_before_sent_at` y `next_before_id`, nulos cuando no quedan elementos.
-
-#### Scenario: Primera página sin posición
-
-- **WHEN** una lectura paginada se solicita sin `before_sent_at` ni `before_id`
-- **THEN** el sistema devuelve la primera página
-
-#### Scenario: Posición inválida
-
-- **WHEN** una lectura paginada recibe `before_sent_at` o `before_id` no parseables, o recibe solo uno de los dos
-- **THEN** el sistema responde 400
 
 ### Requirement: Respuestas de error uniformes en lecturas
 

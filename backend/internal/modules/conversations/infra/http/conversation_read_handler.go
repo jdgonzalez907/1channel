@@ -227,11 +227,11 @@ func beforePositionFromQuery(w http.ResponseWriter, r *http.Request) (*time.Time
 }
 
 func isConversationVisible(conversation sqlc.FindConversationWithContactByIDRow, agentID uuid.UUID) bool {
-	if conversation.Status == domain.ConversationStatusPending.String() {
+	if !conversation.UserID.Valid {
 		return true
 	}
 
-	return conversation.UserID.Valid && pgdb.FromUUID(conversation.UserID) == agentID
+	return pgdb.FromUUID(conversation.UserID) == agentID
 }
 
 func conversationListItemFromRow(row sqlc.ListConversationsForAgentRow) ConversationListItemResponse {

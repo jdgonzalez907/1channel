@@ -165,7 +165,7 @@ SELECT
 FROM conversations c
 JOIN contacts ct ON ct.id = c.contact_id
 JOIN messages lm ON lm.id = c.last_message_id
-WHERE (c.status = 'pending' OR c.user_id = $1)
+WHERE (c.user_id IS NULL OR c.user_id = $1)
   AND c.status = ANY($2::text[])
   AND ($3::uuid IS NULL OR c.contact_id = $3)
   AND (

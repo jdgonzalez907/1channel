@@ -45,10 +45,12 @@ func TestIsConversationVisible(t *testing.T) {
 		conversation sqlc.FindConversationWithContactByIDRow
 		want         bool
 	}{
-		{name: "pending is visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "pending"}, want: true},
+		{name: "pending without agent is visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "pending"}, want: true},
+		{name: "expired without agent is visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "expired"}, want: true},
 		{name: "own is visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "assigned", UserID: pgdb.UUID(agentID)}, want: true},
+		{name: "own expired is visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "expired", UserID: pgdb.UUID(agentID)}, want: true},
 		{name: "other agent is not visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "assigned", UserID: pgdb.UUID(otherAgentID)}, want: false},
-		{name: "finished without agent is not visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "resolved"}, want: false},
+		{name: "expired with other agent is not visible", conversation: sqlc.FindConversationWithContactByIDRow{Status: "expired", UserID: pgdb.UUID(otherAgentID)}, want: false},
 	}
 
 	for _, tt := range tests {
