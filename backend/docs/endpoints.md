@@ -101,8 +101,8 @@ Query params:
 | `before_sent_at`       | no          | posición; debe ir junto con `before_id`                |
 | `before_id`            | no          | posición; debe ir junto con `before_sent_at`           |
 
-Visibilidad: `pending` (todos) o asignadas al solicitante. Las `expired`/`resolved` se
-listan en `finished` solo si el agente asignado es el solicitante.
+Visibilidad: sin agente asignado (incluye `pending` y `expired` sin agente), o asignada al
+solicitante. Las `resolved`/`expired` con agente se listan en `finished` solo para su agente.
 
 - `200`:
 
@@ -146,8 +146,8 @@ curl -s "$BASE/v1/conversations?status=open&before_sent_at=<next_before_sent_at>
 ### GET /v1/conversations/{id}
 
 Requiere auth. Devuelve la conversación y sus últimos 20 mensajes en orden `sent_at`
-ascendente (empate por `id`). Accesible si es `pending` o si el agente asignado es el
-solicitante.
+ascendente (empate por `id`). Accesible si no tiene agente asignado o si el agente asignado
+es el solicitante.
 
 - `200`:
 
