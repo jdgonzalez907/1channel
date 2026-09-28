@@ -1079,6 +1079,136 @@ func TestConversation_ReceiveContactMessageDelete(t *testing.T) {
 	}
 }
 
+func TestConversation_ReceiveContactMessageRead(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	contactID := uuid.NewV7()
+	otherContact := uuid.NewV7()
+	now := time.Now()
+	newestReadAt := now.Add(time.Hour)
+	finishedAt := now.Add(-time.Hour)
+	deletedAt := now.Add(-time.Hour)
+	text := "hello"
+	contactMsgID := uuid.NewV7()
+	agentMsgID := uuid.NewV7()
+
+	const (
+		contactExternalID = "wa-contact-001"
+		agentExternalID   = "wa-agent-001"
+	)
+
+	tests := []struct {
+		name        string
+		convStatus  ConversationStatus
+		finishedAt  *time.Time
+		externalID  string
+		callerID    uuid.UUID
+		agentStatus MessageStatus
+		preReadAt   *time.Time
+		deletedAt   *time.Time
+		wantErr     error
+		wantStatus  MessageStatus
+		wantReadAt  *time.Time
+	}{
+		{
+			name:       "success",
+			convStatus: ConversationStatusAssigned,
+			externalID: agentExternalID,
+			callerID:   contactID,
+			wantStatus: MessageStatusRead,
+			wantReadAt: &now,
+		},
+		{
+			name:       "contact not owner",
+			convStatus: ConversationStatusAssigned,
+			externalID: agentExternalID,
+			callerID:   otherContact,
+			wantErr:    ErrConversationContactNotOwner,
+		},
+		{
+			name:       "externalID not found",
+			convStatus: ConversationStatusAssigned,
+			externalID: "wa-unknown",
+			callerID:   contactID,
+			wantErr:    ErrMessageNotFound,
+		},
+		{
+			name:       "message not from agent",
+			convStatus: ConversationStatusAssigned,
+			externalID: contactExternalID,
+			callerID:   contactID,
+			wantErr:    ErrConversationContactNotOwner,
+		},
+		{
+			name:       "conversation finished is allowed",
+			convStatus: ConversationStatusExpired,
+			finishedAt: &finishedAt,
+			externalID: agentExternalID,
+			callerID:   contactID,
+			wantStatus: MessageStatusRead,
+			wantReadAt: &now,
+		},
+		{
+			name:        "stale read is discarded",
+			convStatus:  ConversationStatusAssigned,
+			externalID:  agentExternalID,
+			callerID:    contactID,
+			agentStatus: MessageStatusRead,
+			preReadAt:   &newestReadAt,
+			wantStatus:  MessageStatusRead,
+			wantReadAt:  &newestReadAt,
+		},
+		{
+			name:        "deleted message keeps deleted status and records read",
+			convStatus:  ConversationStatusAssigned,
+			externalID:  agentExternalID,
+			callerID:    contactID,
+			agentStatus: MessageStatusDeleted,
+			deletedAt:   &deletedAt,
+			wantStatus:  MessageStatusDeleted,
+			wantReadAt:  &now,
+		},
+		{
+			name:        "failed message is not marked as read",
+			convStatus:  ConversationStatusAssigned,
+			externalID:  agentExternalID,
+			callerID:    contactID,
+			agentStatus: MessageStatusFailed,
+			wantStatus:  MessageStatusFailed,
+			wantReadAt:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			contactMsg, _ := NewMessage(contactMsgID, MessageStatusSent, MessageTypeText, &text, nil, &contactID, nil, now, nil, nil, nil)
+			_ = contactMsg.AssignExternalID(contactExternalID)
+
+			agentStatus := tt.agentStatus
+			if agentStatus == "" {
+				agentStatus = MessageStatusSent
+			}
+			agentMsg, _ := NewMessage(agentMsgID, agentStatus, MessageTypeText, &text, &agentID, nil, nil, now, tt.preReadAt, nil, tt.deletedAt)
+			_ = agentMsg.AssignExternalID(agentExternalID)
+
+			conv, _ := NewConversation(uuid.NewV7(), tt.convStatus, []*Message{contactMsg, agentMsg}, &agentID, &contactID, now, nil, tt.finishedAt)
+
+			// Act
+			err := conv.ReceiveContactMessageRead(tt.callerID, tt.externalID, now)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.wantStatus, conv.found[agentMsgID].Status())
+			assert.Equal(t, tt.wantReadAt, conv.found[agentMsgID].ReadAt())
+		})
+	}
+}
+
 func TestConversation_ReceiveContactMessageEdit_DiscardsStaleEdit(t *testing.T) {
 	// Arrange
 	agentID := uuid.NewV7()

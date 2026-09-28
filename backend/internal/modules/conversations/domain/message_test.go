@@ -229,6 +229,86 @@ func TestMessage_MarkAsRead(t *testing.T) {
 	assert.Equal(t, &readAt, msg.ReadAt())
 }
 
+func TestMessage_MarkAsRead_DiscardsStaleRead(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	now := time.Now()
+	newestAt := now.Add(time.Hour)
+
+	tests := []struct {
+		name string
+		at   time.Time
+	}{
+		{name: "earlier timestamp", at: now},
+		{name: "equal timestamp", at: newestAt},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg, _ := NewMessage(uuid.NewV7(), MessageStatusSent, MessageTypeText, strPtr("hello"), &agentID, nil, nil, now, nil, nil, nil)
+			msg.MarkAsRead(newestAt)
+
+			// Act
+			msg.MarkAsRead(tt.at)
+
+			// Assert
+			assert.Equal(t, MessageStatusRead, msg.Status())
+			assert.Equal(t, &newestAt, msg.ReadAt())
+		})
+	}
+}
+
+func TestMessage_MarkAsRead_PreservesTerminalStatus(t *testing.T) {
+	// Arrange
+	agentID := uuid.NewV7()
+	now := time.Now()
+	deletedAt := now.Add(-time.Hour)
+	readAt := now.Add(time.Hour)
+
+	tests := []struct {
+		name       string
+		msgFunc    func() *Message
+		wantStatus MessageStatus
+		wantReadAt bool
+	}{
+		{
+			name: "deleted message keeps deleted status and records read",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusDeleted, MessageTypeText, strPtr("hello"), &agentID, nil, nil, now, nil, nil, &deletedAt)
+				return msg
+			},
+			wantStatus: MessageStatusDeleted,
+			wantReadAt: true,
+		},
+		{
+			name: "failed message is not marked as read",
+			msgFunc: func() *Message {
+				msg, _ := NewMessage(uuid.NewV7(), MessageStatusFailed, MessageTypeText, strPtr("hello"), &agentID, nil, nil, now, nil, nil, nil)
+				return msg
+			},
+			wantStatus: MessageStatusFailed,
+			wantReadAt: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := tt.msgFunc()
+
+			// Act
+			msg.MarkAsRead(readAt)
+
+			// Assert
+			assert.Equal(t, tt.wantStatus, msg.Status())
+			if tt.wantReadAt {
+				assert.Equal(t, &readAt, msg.ReadAt())
+			} else {
+				assert.Nil(t, msg.ReadAt())
+			}
+		})
+	}
+}
+
 func TestMessage_EditText(t *testing.T) {
 	// Arrange
 	agentID := uuid.NewV7()

@@ -65,7 +65,7 @@ func (h *ConversationWriteHandler) handleSendAgentMessage(w http.ResponseWriter,
 		SentAt:         time.Now().UTC(),
 	})
 	if err != nil {
-		h.writeError(w, r, err)
+		writeConversationError(w, r, err)
 		return
 	}
 
@@ -100,7 +100,7 @@ func (h *ConversationWriteHandler) handleMarkMessagesAsRead(w http.ResponseWrite
 		ReadAt:         time.Now().UTC(),
 	})
 	if err != nil {
-		h.writeError(w, r, err)
+		writeConversationError(w, r, err)
 		return
 	}
 
@@ -135,14 +135,14 @@ func (h *ConversationWriteHandler) handleResolveConversation(w http.ResponseWrit
 		ResolvedAt:     time.Now().UTC(),
 	})
 	if err != nil {
-		h.writeError(w, r, err)
+		writeConversationError(w, r, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ConversationWriteHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+func writeConversationError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrConversationAgentNotOwner),
 		errors.Is(err, domain.ErrConversationContactNotOwner):

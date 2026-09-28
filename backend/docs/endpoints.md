@@ -248,6 +248,52 @@ curl -s -o /dev/null -w "%{http_code}\n" -X PATCH "$BASE/v1/conversations/$CID" 
 
 ---
 
+## Webhooks
+
+### POST /v1/webhooks/1channel
+
+Público (sin auth). Canal de prueba para las operaciones del contacto. El timestamp lo
+genera el servidor; no viaja en el cuerpo. El cuerpo es un envelope único con `event`
+obligatorio y los campos que cada evento requiera.
+
+Eventos y campos:
+
+| `event`            | `external_contact_id` | `external_message_id` | `text`   |
+|--------------------|-----------------------|-----------------------|----------|
+| `message.received` | requerido             | requerido             | requerido |
+| `message.edited`   | requerido             | requerido             | requerido |
+| `message.deleted`  | requerido             | requerido             | —        |
+| `message.read`     | requerido             | requerido             | —        |
+
+- `204` sin cuerpo
+- `400` si el cuerpo no es JSON válido
+- `422` si falta un campo requerido · `200` sin efecto si `event` es desconocido
+- `403` si el mensaje es de otro contacto · `404` si el mensaje no existe
+
+```bash
+# recibir
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
+  -H "Content-Type: application/json" \
+  -d '{"event":"message.received","external_contact_id":"5491112345678","external_message_id":"wamid.001","text":"Hola, quiero comprar una consola."}'
+
+# editar
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
+  -H "Content-Type: application/json" \
+  -d '{"event":"message.edited","external_contact_id":"5491112345678","external_message_id":"wamid.001","text":"Hola, quiero comprar una consola roja."}'
+
+# eliminar
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
+  -H "Content-Type: application/json" \
+  -d '{"event":"message.deleted","external_contact_id":"5491112345678","external_message_id":"wamid.001"}'
+
+# acuse de lectura de un mensaje del agente
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
+  -H "Content-Type: application/json" \
+  -d '{"event":"message.read","external_contact_id":"5491112345678","external_message_id":"wamid.agent.001"}'
+```
+
+---
+
 ## Errores
 
 Formato uniforme:
@@ -284,7 +330,8 @@ curl -s "$BASE/v1/conversations" -H "Authorization: Bearer $TOKEN" | jq   # 422 
 ## Notas
 
 - El `POST /v1/users` es público (bootstrap); el resto exige `Authorization`.
-- No hay endpoint para que un contacto envíe/edite/elimine mensajes: eso llega por webhook
-  (aún no implementado).
+- Las operaciones del contacto (recibir, editar, eliminar y acuse de lectura) llegan por el
+  webhook de prueba `POST /v1/webhooks/1channel`, público y sin auth. Es la contraparte de
+  prueba de los futuros adaptadores por plataforma (`/v1/webhooks/meta`, `/v1/webhooks/telegram`).
 - Un agente no puede pasar una conversación a `expired` por HTTP (responde `422`).
 - Los `external_id` y los `id` son UUID v7.

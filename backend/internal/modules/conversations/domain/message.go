@@ -154,8 +154,18 @@ func (m *Message) AssignExternalID(id string) error {
 }
 
 func (m *Message) MarkAsRead(at time.Time) {
+	if m.status == MessageStatusFailed {
+		return
+	}
+
+	if m.readAt != nil && !at.After(*m.readAt) {
+		return
+	}
+
 	m.readAt = &at
-	m.status = MessageStatusRead
+	if m.status != MessageStatusDeleted {
+		m.status = MessageStatusRead
+	}
 }
 
 func (m *Message) ensureNotFailed() error {

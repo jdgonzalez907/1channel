@@ -17,6 +17,7 @@ type apiMocks struct {
 	receive       *app.MockReceiveContactMessage
 	receiveEdit   *app.MockReceiveContactMessageEdit
 	receiveDelete *app.MockReceiveContactMessageDelete
+	receiveRead   *app.MockReceiveContactMessageRead
 	send          *app.MockSendAgentMessage
 	read          *app.MockAgentReadConversation
 	expire        *app.MockExpireConversation
@@ -28,13 +29,14 @@ func newAPIWithMocks() (ConversationsAPI, *apiMocks) {
 		receive:       &app.MockReceiveContactMessage{},
 		receiveEdit:   &app.MockReceiveContactMessageEdit{},
 		receiveDelete: &app.MockReceiveContactMessageDelete{},
+		receiveRead:   &app.MockReceiveContactMessageRead{},
 		send:          &app.MockSendAgentMessage{},
 		read:          &app.MockAgentReadConversation{},
 		expire:        &app.MockExpireConversation{},
 		resolve:       &app.MockResolveConversation{},
 	}
 
-	api := NewConversationsAPI(m.receive, m.receiveEdit, m.receiveDelete, m.send, m.read, m.expire, m.resolve)
+	api := NewConversationsAPI(m.receive, m.receiveEdit, m.receiveDelete, m.receiveRead, m.send, m.read, m.expire, m.resolve)
 
 	return api, m
 }
@@ -266,6 +268,57 @@ func TestConversationsAPI_ReceiveContactMessageDelete(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			m.receiveDelete.AssertExpectations(t)
+		})
+	}
+}
+
+func TestConversationsAPI_ReceiveContactMessageRead(t *testing.T) {
+	now := time.Now()
+	ucErr := errors.New("use case failure")
+	input := ReceiveContactMessageReadInput{ExternalMessageID: "wamid.1", ExternalContactID: "54911", ReadAt: now}
+
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, m *app.MockReceiveContactMessageRead)
+		wantErr error
+	}{
+		{
+			name: "success - delegates",
+			setup: func(t *testing.T, m *app.MockReceiveContactMessageRead) {
+				t.Helper()
+				m.On("Execute", mock.Anything, app.ReceiveContactMessageReadInput{
+					ExternalMessageID: input.ExternalMessageID,
+					ExternalContactID: input.ExternalContactID,
+					ReadAt:            input.ReadAt,
+				}).Return(nil).Once()
+			},
+		},
+		{
+			name: "failure - propagates error",
+			setup: func(t *testing.T, m *app.MockReceiveContactMessageRead) {
+				t.Helper()
+				m.On("Execute", mock.Anything, mock.Anything).Return(ucErr).Once()
+			},
+			wantErr: ucErr,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Arrange
+			api, m := newAPIWithMocks()
+			tt.setup(t, m.receiveRead)
+
+			// Act
+			err := api.ReceiveContactMessageRead(context.Background(), input)
+
+			// Assert
+			if tt.wantErr != nil {
+				assert.ErrorIs(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+			m.receiveRead.AssertExpectations(t)
 		})
 	}
 }

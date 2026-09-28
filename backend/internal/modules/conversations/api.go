@@ -12,6 +12,7 @@ type ConversationsAPI interface {
 	ReceiveContactMessage(ctx context.Context, input ReceiveContactMessageInput) error
 	ReceiveContactMessageEdit(ctx context.Context, input ReceiveContactMessageEditInput) error
 	ReceiveContactMessageDelete(ctx context.Context, input ReceiveContactMessageDeleteInput) error
+	ReceiveContactMessageRead(ctx context.Context, input ReceiveContactMessageReadInput) error
 	SendAgentMessage(ctx context.Context, input SendAgentMessageInput) error
 	AgentReadConversation(ctx context.Context, input AgentReadConversationInput) error
 	ExpireConversation(ctx context.Context, input ExpireConversationInput) error
@@ -36,6 +37,12 @@ type ReceiveContactMessageDeleteInput struct {
 	ExternalMessageID string
 	ExternalContactID string
 	DeletedAt         time.Time
+}
+
+type ReceiveContactMessageReadInput struct {
+	ExternalMessageID string
+	ExternalContactID string
+	ReadAt            time.Time
 }
 
 type SendAgentMessageInput struct {
@@ -66,6 +73,7 @@ type conversationsAPI struct {
 	receiveContactMessage       app.ReceiveContactMessage
 	receiveContactMessageEdit   app.ReceiveContactMessageEdit
 	receiveContactMessageDelete app.ReceiveContactMessageDelete
+	receiveContactMessageRead   app.ReceiveContactMessageRead
 	sendAgentMessage            app.SendAgentMessage
 	agentReadConversation       app.AgentReadConversation
 	expireConversation          app.ExpireConversation
@@ -76,6 +84,7 @@ func NewConversationsAPI(
 	receiveContactMessage app.ReceiveContactMessage,
 	receiveContactMessageEdit app.ReceiveContactMessageEdit,
 	receiveContactMessageDelete app.ReceiveContactMessageDelete,
+	receiveContactMessageRead app.ReceiveContactMessageRead,
 	sendAgentMessage app.SendAgentMessage,
 	agentReadConversation app.AgentReadConversation,
 	expireConversation app.ExpireConversation,
@@ -85,6 +94,7 @@ func NewConversationsAPI(
 		receiveContactMessage:       receiveContactMessage,
 		receiveContactMessageEdit:   receiveContactMessageEdit,
 		receiveContactMessageDelete: receiveContactMessageDelete,
+		receiveContactMessageRead:   receiveContactMessageRead,
 		sendAgentMessage:            sendAgentMessage,
 		agentReadConversation:       agentReadConversation,
 		expireConversation:          expireConversation,
@@ -117,6 +127,14 @@ func (a *conversationsAPI) ReceiveContactMessageDelete(ctx context.Context, inpu
 		ExternalMessageID: input.ExternalMessageID,
 		ExternalContactID: input.ExternalContactID,
 		DeletedAt:         input.DeletedAt,
+	})
+}
+
+func (a *conversationsAPI) ReceiveContactMessageRead(ctx context.Context, input ReceiveContactMessageReadInput) error {
+	return a.receiveContactMessageRead.Execute(ctx, app.ReceiveContactMessageReadInput{
+		ExternalMessageID: input.ExternalMessageID,
+		ExternalContactID: input.ExternalContactID,
+		ReadAt:            input.ReadAt,
 	})
 }
 

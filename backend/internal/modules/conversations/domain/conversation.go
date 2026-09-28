@@ -410,3 +410,24 @@ func (c *Conversation) ReceiveContactMessageDelete(contactID uuid.UUID, external
 	c.registerActivity(at)
 	return nil
 }
+
+func (c *Conversation) ReceiveContactMessageRead(contactID uuid.UUID, externalID string, at time.Time) error {
+	if c.contactID == nil || contactID != *c.contactID {
+		return ErrConversationContactNotOwner
+	}
+
+	msgID, exists := c.externalMsgIdx[externalID]
+	if !exists {
+		return ErrMessageNotFound
+	}
+
+	msg := c.found[msgID]
+	if msg.AgentID() == nil {
+		return ErrConversationContactNotOwner
+	}
+
+	msg.MarkAsRead(at)
+	c.dirty[msgID] = msg
+	c.registerActivity(at)
+	return nil
+}

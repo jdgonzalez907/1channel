@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"uuid"
 
@@ -28,14 +29,25 @@ func newTestRouter() http.Handler {
 		&app.MockAgentReadConversation{},
 		&app.MockResolveConversation{},
 	)
+	contactWebhookHandler := newTestContactWebhookHandler()
 
 	return newRouter(logger, dependencies{
 		userWriteHandler:         userWriteHandler,
 		userReadHandler:          usershttp.NewUserReadHandler(sqlc.New(nil)),
 		conversationWriteHandler: conversationWriteHandler,
+		contactWebhookHandler:    contactWebhookHandler,
 		conversationReadHandler:  convhttp.NewConversationReadHandler(sqlc.New(nil)),
 		contactReadHandler:       contactshttp.NewContactReadHandler(sqlc.New(nil)),
 	})
+}
+
+func newTestContactWebhookHandler() *convhttp.ContactWebhookHandler {
+	return convhttp.NewContactWebhookHandler(
+		&app.MockReceiveContactMessage{},
+		&app.MockReceiveContactMessageEdit{},
+		&app.MockReceiveContactMessageDelete{},
+		&app.MockReceiveContactMessageRead{},
+	)
 }
 
 func TestRouter_Healthz(t *testing.T) {
@@ -55,6 +67,39 @@ func TestRouter_AuthenticatedRouteRequiresBearer(t *testing.T) {
 	newTestRouter().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestRouter_ContactWebhookIsPublic(t *testing.T) {
+	receive := &app.MockReceiveContactMessage{}
+	receive.On("Execute", mock.Anything, mock.Anything).Return(nil).Once()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	router := newRouter(logger, dependencies{
+		userWriteHandler: usershttp.NewUserWriteHandler(&usersapp.MockCreateUser{}),
+		conversationWriteHandler: convhttp.NewConversationWriteHandler(
+			&app.MockSendAgentMessage{},
+			&app.MockAgentReadConversation{},
+			&app.MockResolveConversation{},
+		),
+		contactWebhookHandler: convhttp.NewContactWebhookHandler(
+			receive,
+			&app.MockReceiveContactMessageEdit{},
+			&app.MockReceiveContactMessageDelete{},
+			&app.MockReceiveContactMessageRead{},
+		),
+		userReadHandler:         usershttp.NewUserReadHandler(sqlc.New(nil)),
+		conversationReadHandler: convhttp.NewConversationReadHandler(sqlc.New(nil)),
+		contactReadHandler:      contactshttp.NewContactReadHandler(sqlc.New(nil)),
+	})
+
+	body := `{"event":"message.received","external_contact_id":"54911","external_message_id":"wamid.1","text":"hola"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/webhooks/1channel", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	receive.AssertExpectations(t)
 }
 
 func TestRouter_ReadRoutesRequireBearer(t *testing.T) {

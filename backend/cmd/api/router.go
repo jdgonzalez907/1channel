@@ -27,6 +27,7 @@ func newRouter(logger *slog.Logger, deps dependencies) http.Handler {
 
 	router.Route("/v1", func(r chi.Router) {
 		deps.userWriteHandler.Register(r)
+		deps.contactWebhookHandler.Register(r)
 
 		r.Group(func(r chi.Router) {
 			r.Use(sharedmiddleware.Auth(deps.userLookup))

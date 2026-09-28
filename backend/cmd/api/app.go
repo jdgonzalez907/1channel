@@ -27,6 +27,7 @@ type dependencies struct {
 	userWriteHandler         *usershttp.UserWriteHandler
 	userReadHandler          *usershttp.UserReadHandler
 	conversationWriteHandler *convhttp.ConversationWriteHandler
+	contactWebhookHandler    *convhttp.ContactWebhookHandler
 	conversationReadHandler  *convhttp.ConversationReadHandler
 	contactReadHandler       *contactshttp.ContactReadHandler
 	userLookup               sharedmiddleware.UserLookup
@@ -35,12 +36,13 @@ type dependencies struct {
 func newDependencies(db *pgdb.DB) dependencies {
 	usersAPI, userWriteHandler := newUsersModule(db)
 	contactsAPI := newContactsModule(db)
-	conversationWriteHandler := newConversationsModule(db, usersAPI, contactsAPI)
+	conversationWriteHandler, contactWebhookHandler := newConversationsModule(db, usersAPI, contactsAPI)
 
 	return dependencies{
 		userWriteHandler:         userWriteHandler,
 		userReadHandler:          usershttp.NewUserReadHandler(db.Queries),
 		conversationWriteHandler: conversationWriteHandler,
+		contactWebhookHandler:    contactWebhookHandler,
 		conversationReadHandler:  convhttp.NewConversationReadHandler(db.Queries),
 		contactReadHandler:       contactshttp.NewContactReadHandler(db.Queries),
 		userLookup:               newUserLookup(db),
@@ -78,11 +80,23 @@ func newContactsModule(db *pgdb.DB) contacts.ContactsAPI {
 	)
 }
 
-func newConversationsModule(db *pgdb.DB, usersAPI users.UsersAPI, contactsAPI contacts.ContactsAPI) *convhttp.ConversationWriteHandler {
+func newConversationsModule(db *pgdb.DB, usersAPI users.UsersAPI, contactsAPI contacts.ContactsAPI) (*convhttp.ConversationWriteHandler, *convhttp.ContactWebhookHandler) {
 	conversationRepository := convpg.NewConversationRepository(db)
 	sendAgentMessage := convapp.NewSendAgentMessage(conversationRepository, usersAPI, contactsAPI, messagesender.NewStubSender())
 	agentReadConversation := convapp.NewAgentReadConversation(conversationRepository, usersAPI)
 	resolveConversation := convapp.NewResolveConversation(conversationRepository, usersAPI)
+	receiveContactMessage := convapp.NewReceiveContactMessage(conversationRepository, contactsAPI)
+	receiveContactMessageEdit := convapp.NewReceiveContactMessageEdit(conversationRepository, contactsAPI)
+	receiveContactMessageDelete := convapp.NewReceiveContactMessageDelete(conversationRepository, contactsAPI)
+	receiveContactMessageRead := convapp.NewReceiveContactMessageRead(conversationRepository, contactsAPI)
 
-	return convhttp.NewConversationWriteHandler(sendAgentMessage, agentReadConversation, resolveConversation)
+	writeHandler := convhttp.NewConversationWriteHandler(sendAgentMessage, agentReadConversation, resolveConversation)
+	webhookHandler := convhttp.NewContactWebhookHandler(
+		receiveContactMessage,
+		receiveContactMessageEdit,
+		receiveContactMessageDelete,
+		receiveContactMessageRead,
+	)
+
+	return writeHandler, webhookHandler
 }
