@@ -1,0 +1,28 @@
+# Binarios de programas y plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Binario de test
+*.test
+
+# Cobertura y artefactos de prueba
+*.out
+coverage.*
+*.coverprofile
+*.cov
+
+# Go workspace
+go.work
+go.work.sum
+
+# Archivos de entorno
+.env
+.env.*
+!.env.example
+
+# Editor/IDE dentro del componente
+.idea/
+.vscode/

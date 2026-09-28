@@ -2,35 +2,46 @@
 
 ## Project Overview
 
-**1Channel** is a conversational multi-agent, multi-channel CRM system built with Go. It's platform-agnostic and designed as a modular monolith following Clean Architecture and Domain-Driven Design (DDD) principles.
+**1Channel** is a conversational multi-agent, multi-channel CRM system in one monorepo: a Go REST API (`backend/`) and a Vue single-page app (`frontend/`). The backend is platform-agnostic and designed as a modular monolith following Clean Architecture and Domain-Driven Design (DDD) principles.
 
-A contact (customer) talks to the company through a channel; an agent (system user) answers. Conversations are short support/sales threads. The current REST API is internal and first-party (the same person builds front and back), so pragmatic decisions beat over-engineering.
+A contact (customer) talks to the company through a channel; an agent (system user) answers. Conversations are short support/sales threads. The current REST API is internal and first-party (the same person builds front and back), so pragmatic decisions beat over-engineering. Front and back live in the same repo but build, release, and deploy independently.
 
 ## Architecture & Structure
 
 ### Directory Layout
 ```
-├── cmd/api/                    # Application entrypoint (main.go, router, config)
-├── internal/
-│   ├── modules/                # Business modules (one per bounded context)
-│   │   └── <module>/           # e.g. contacts, conversations, users
-│   │       ├── api.go          # Public write API consumed by other modules
-│   │       ├── app/            # Use cases (application services)
-│   │       ├── domain/         # Aggregates, entities, value objects, repository ports
-│   │       └── infra/          # Adapters: pg repositories, http handlers
-│   └── shared/infra/           # Cross-cutting infra
-│       ├── http/httperror/     # problem+json helpers
-│       ├── http/httputil/      # JSON, path params, lookup errors
-│       ├── http/middleware/    # Auth, logging, timeout
-│       └── pgdb/               # pgx pool, sqlc wrapper, UUID/time helpers
-├── db/
-│   ├── migrations/             # golang-migrate SQL files
-│   └── queries/                # SQLC query definitions
+├── backend/                    # REST API (Go)
+│   ├── cmd/api/                # Application entrypoint (main.go, router, config)
+│   ├── internal/
+│   │   ├── modules/            # Business modules (one per bounded context)
+│   │   │   └── <module>/       # e.g. contacts, conversations, users
+│   │   │       ├── api.go      # Public write API consumed by other modules
+│   │   │       ├── app/        # Use cases (application services)
+│   │   │       ├── domain/     # Aggregates, entities, value objects, repository ports
+│   │   │       └── infra/      # Adapters: pg repositories, http handlers
+│   │   └── shared/infra/       # Cross-cutting infra
+│   │       ├── http/httperror/ # problem+json helpers
+│   │       ├── http/httputil/  # JSON, path params, lookup errors
+│   │       ├── http/middleware/# Auth, logging, timeout
+│   │       └── pgdb/           # pgx pool, sqlc wrapper, UUID/time helpers
+│   ├── db/
+│   │   ├── migrations/         # golang-migrate SQL files
+│   │   └── queries/            # SQLC query definitions
+│   ├── docs/endpoints.md       # API reference
+│   ├── docker-compose.yml      # dev: postgres 18 + migrate
+│   ├── Dockerfile              # image: ghcr.io/<owner>/<repo>/api
+│   └── .env.example            # dev config for the backend
+├── frontend/                   # SPA (Vue 3 + TypeScript + Vite + pnpm)
+│   ├── src/                    # Vue shell
+│   ├── nginx.conf              # serves the SPA and proxies /v1 -> api:8080
+│   ├── Dockerfile              # image: ghcr.io/<owner>/<repo>/web
+│   └── .env.example            # future VITE_* variables
+├── docker-compose.prod.yml     # web + api only (no DB; configured by envs)
+├── Makefile                    # single interface (backend + frontend)
 ├── openspec/                   # Spec-driven development (source of truth)
 │   ├── specs/                  # Durable capability specs
 │   └── changes/                # In-flight changes + archive
-├── docker-compose.yml          # postgres 18 + migrate
-└── .github/workflows/          # CI/CD
+└── .github/workflows/          # CI/CD per component (backend.yml, frontend.yml)
 ```
 
 ### Module Design Principles
@@ -58,6 +69,10 @@ A contact (customer) talks to the company through a channel; an agent (system us
 - **Reads**: HTTP handler -> `*sqlc.Queries` directly -> Response DTO (no app/domain/repository)
 - **Pagination**: explicit `before_sent_at` / `before_id` (+ `next_before_sent_at` / `next_before_id`), not an opaque cursor
 - **Containerization**: Docker + Docker Compose
+- **Frontend**: Vue 3 + TypeScript + Vite + pnpm (Composition API, `<script setup>`), served by nginx in the `web` image
+- **Monorepo**: `backend/` (Go) and `frontend/` (SPA) build and deploy independently (CI filters by `paths`)
+- **Deployment**: production compose with `web` + `api` only; the database is external and configured by envs; TLS is terminated by Cloudflare Tunnel (containers are plain HTTP); deploy by commit sha per component
+- **API boundary**: `/v1` is the compatibility contract; the front consumes the API same-origin (no CORS)
 
 ## Domain Model & Business Rules
 
@@ -135,23 +150,25 @@ An agent cannot `expired` via HTTP (422).
 ## Development Commands
 
 ### Docker Environment
-Compose raises data only; the app runs on the host with `go run` for fast iteration.
+Compose raises data only; the app runs on the host with `go run` for fast iteration. The dev compose lives in `backend/` and is driven from the root `Makefile`.
 
 ```bash
 make up                    # Start postgres 18 (UTC) in background
 make down                  # Stop services
-docker compose ps          # Status and healthcheck
-docker compose logs -f postgres
+docker compose -f backend/docker-compose.yml --project-directory backend ps
+docker compose -f backend/docker-compose.yml --project-directory backend logs -f postgres
 make migrate-up            # Apply migrations on demand
 make reset                 # Recreate DB from scratch
 make seed                  # Load dev test data (SOLO dev; DESTRUCTIVE)
 ```
 
+The frontend runs separately with Vite: `make run-web` (proxies `/v1` to `localhost:8080`). `make run` launches both backend and frontend.
+
 If `docker` asks for permissions: `make DOCKER="sudo docker" up` (or add your user to the `docker` group). Note: with passworded sudo, `make` may not work non-interactively; the `migrate` CLI against `localhost:5432` is the fallback (see below).
 
 ### Dev Seed Data
 
-`make seed` runs `db/seed/dev_seed.sql` inside the `postgres` container. It is a plain
+`make seed` runs `backend/db/seed/dev_seed.sql` inside the `postgres` container. It is a plain
 SQL script (not a migration and never for production) that **truncates** `users`,
 `contacts`, `conversations` and `messages`, then reloads realistic test data: 3 agents,
 50 contacts, 90 conversations (30 open / 60 finished) and 3000 messages. It aborts if the
@@ -160,18 +177,24 @@ target database name does not contain `dev`. Requires the database to be migrate
 
 ### Essential Commands (host or container)
 ```bash
-go build ./...                  # Compile everything
-go run ./cmd/api                # Run the app (needs .env sourced)
-go build ./cmd/api              # Build only the binary
+# Backend (module lives in backend/)
+go -C backend build ./...       # Compile everything
+go -C backend run ./cmd/api     # Run the app (needs .env sourced; or: make run-api)
+go -C backend build ./cmd/api   # Build only the binary
 
 # Quality gates (MUST pass locally before push)
-go mod verify
-gofmt -l .                      # Must be clean
-go vet ./...
-go build ./...
-go test -race -count=1 ./...
+go -C backend mod verify
+gofmt -l backend                # Must be clean
+go -C backend vet ./...
+go -C backend build ./...
+go -C backend test -race -count=1 ./...
 
-# SQLC (regenerate after changing db/queries/*.sql)
+# Frontend
+pnpm --dir frontend install
+pnpm --dir frontend type-check
+pnpm --dir frontend build
+
+# SQLC (regenerate after changing backend/db/queries/*.sql; run from backend/)
 sqlc generate
 
 # Migrations
@@ -186,14 +209,14 @@ make migrate-create NAME=migration_name
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"
 DSN="postgres://dev:dev@localhost:5432/1channel_dev?sslmode=disable"
-migrate -path db/migrations -database "$DSN" up
-migrate -path db/migrations -database "$DSN" down 2   # then up to re-apply edited files
+migrate -path backend/db/migrations -database "$DSN" up
+migrate -path backend/db/migrations -database "$DSN" down 2   # then up to re-apply edited files
 ```
 
 ## Environment Setup
 
 ### Required Environment Variables
-Copy `.env.example` to `.env`. The app does not load `.env` itself: `make run` sources it, and Docker Compose autoloads it for interpolation.
+Copy `backend/.env.example` to `backend/.env`. The app does not load `.env` itself: `make run-api` sources it, and Docker Compose autoloads it (from `backend/`) for interpolation. The frontend has its own `frontend/.env` for future `VITE_*` variables.
 
 ```bash
 HTTP_PORT=8080
@@ -219,18 +242,29 @@ Integration variables (`META_*`, `WHATSAPP_*`, `ONECHANNEL_SECRET`) are intentio
 ## CI/CD Pipeline
 
 ### Quality Gates (GitHub Actions)
-The CI runs these checks in order:
-1. `go mod verify`
-2. `gofmt -l .` (must be clean)
-3. `go vet ./...`
-4. `go build ./...`
-5. `go test -race -count=1 ./...`
+Two workflows run independently, filtered by `paths`:
 
-CI has **no database**: tests must not require one.
+- **`backend.yml`** (on `backend/**`): `go mod verify`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race -count=1 ./...` (run with `working-directory: backend`).
+- **`frontend.yml`** (on `frontend/**`): `pnpm install --frozen-lockfile`, `pnpm type-check`, `pnpm build`.
+
+CI has **no database**: tests must not require one. A commit that only touches one component does not rebuild the other.
 
 ### Docker Build
-- Multi-stage build with Go 1.27-alpine
-- Final image: Alpine 3.24, non-root user `app`, port 8080
+- **`api`** (`backend/Dockerfile`): multi-stage with Go 1.27-alpine; final image Alpine 3.24, non-root user `app`, port 8080.
+- **`web`** (`frontend/Dockerfile`): multi-stage with node:24-alpine (pnpm build) → nginx:1.27-alpine serving `dist/` and proxying `/v1` to `api:8080`.
+
+### Production Deploy
+`docker-compose.prod.yml` runs only `web` + `api`. Images are versioned by sha per component; the database is external and configured by envs injected at compose time (a `.env` on the host, next to the compose file). TLS is terminated by Cloudflare Tunnel, so containers speak plain HTTP (`web` listens on `:80`, `api` stays internal on `:8080`).
+
+```bash
+# 1) Migrate FIRST (manual; the host has no `migrate` binary)
+docker run --rm -v "$PWD/backend/db/migrations:/migrations" \
+  migrate/migrate -path=/migrations -database "$POSTGRES_URL" up
+
+# 2) Deploy one component independently (change the sha, recreate only that service)
+API_TAG=<sha> docker compose -f docker-compose.prod.yml up -d --no-deps api
+WEB_TAG=<sha> docker compose -f docker-compose.prod.yml up -d --no-deps web
+```
 
 ## Git Workflow (Git Flow - Manual)
 
@@ -308,10 +342,10 @@ func TestUserService_Create(t *testing.T) {
 
 ### Test Commands
 ```bash
-go test ./...
-go test ./internal/modules/...
-go test -run TestFunctionName ./internal/modules/...
-go test -coverprofile=coverage.out ./...
+go -C backend test ./...
+go -C backend test ./internal/modules/...
+go -C backend test -run TestFunctionName ./internal/modules/...
+go -C backend test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
@@ -372,7 +406,7 @@ Rule of thumb: if a block repeats across two or more handlers, move it to `share
 
 ### 2. SQLC Regeneration
 **Problem**: DB code out of sync.
-**Solution**: after changing `db/queries/*.sql`, run `sqlc generate`. Never edit generated files.
+**Solution**: after changing `backend/db/queries/*.sql`, run `sqlc generate` from `backend/`. Never edit generated files.
 
 ### 3. Import Cycles / Layer Violations
 **Problem**: domain importing infra.
@@ -380,7 +414,7 @@ Rule of thumb: if a block repeats across two or more handlers, move it to `share
 
 ### 4. Environment Variables
 **Problem**: app fails to start.
-**Solution**: `.env` must exist (see `.env.example`); `make run` sources it.
+**Solution**: `backend/.env` must exist (see `backend/.env.example`); `make run-api` sources it.
 
 ### 5. Database Connectivity
 **Problem**: app can't connect.
@@ -404,13 +438,18 @@ Rule of thumb: if a block repeats across two or more handlers, move it to `share
 ```bash
 make up                         # Start postgres 18 (UTC)
 make migrate-up                 # Apply migrations
-make run                        # go run ./cmd/api, sourcing .env
+make run                        # Backend + frontend at once
+make run-api                    # Backend only (go run ./cmd/api, sourcing backend/.env)
+make run-web                    # Frontend only (Vite, proxies /v1 to :8080)
 make down                       # Stop services
 ```
 
 ### Quality Gates
 ```bash
-go mod verify && gofmt -l . && go vet ./... && go build ./... && go test -race -count=1 ./...
+# Backend (from repo root)
+go -C backend mod verify && gofmt -l backend && go -C backend vet ./... && go -C backend build ./... && go -C backend test -race -count=1 ./...
+# Frontend
+pnpm --dir frontend type-check && pnpm --dir frontend build
 ```
 
 ### Database
@@ -423,7 +462,7 @@ sqlc generate
 
 ## Important Notes
 
-- **Never commit `.env`** — `.env` / `.env.*` are gitignored (only `.env.example` is tracked).
+- **Never commit `.env`** — `.env` / `.env.*` are gitignored (only `.env.example` is tracked). There is one `.env` per project (`backend/`, `frontend/`).
 - **Run quality gates locally** before pushing.
 - **SQLC generates code** — don't edit generated files.
 - **Infra -> domain is allowed; domain -> infra is not.**
@@ -431,6 +470,8 @@ sqlc generate
 - **Unit tests only**; CI has no database.
 - **Timestamps are UTC**; Response DTOs use `time.Time`.
 - **App runs on the host** against `localhost`; `postgres` only exists inside Compose.
+- **The Go module lives in `backend/`**; use `go -C backend ...` or the root `Makefile`.
+- **Production** is `docker-compose.prod.yml` with only `web` + `api`; the database is external via envs; TLS is terminated by Cloudflare Tunnel. Migrations in production are run manually, before deploying.
 - **OpenSpec specs are authoritative** for behavior.
 
 ---
