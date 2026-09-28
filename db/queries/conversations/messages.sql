@@ -32,3 +32,24 @@ ON CONFLICT (id) DO UPDATE SET
     read_at = EXCLUDED.read_at,
     edited_at = EXCLUDED.edited_at,
     deleted_at = EXCLUDED.deleted_at;
+
+-- name: ListConversationMessagesPage :many
+SELECT
+    id,
+    status,
+    type,
+    text,
+    user_id,
+    contact_id,
+    sent_at,
+    read_at,
+    edited_at,
+    deleted_at
+FROM messages
+WHERE conversation_id = sqlc.arg('conversation_id')
+  AND (
+      sqlc.narg('before_sent_at')::timestamptz IS NULL
+      OR (sent_at, id) < (sqlc.narg('before_sent_at')::timestamptz, sqlc.narg('before_id')::uuid)
+  )
+ORDER BY sent_at DESC, id DESC
+LIMIT sqlc.arg('page_size')::int + 1;

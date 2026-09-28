@@ -24,3 +24,63 @@ ON CONFLICT (id) DO UPDATE SET
     contact_id = EXCLUDED.contact_id,
     updated_at = EXCLUDED.updated_at,
     finished_at = EXCLUDED.finished_at;
+
+-- name: RefreshConversationLastMessage :exec
+UPDATE conversations c
+SET last_message_id = last_message.id,
+    last_message_at = last_message.sent_at,
+    unread_count = unread_count.cnt
+FROM (
+    SELECT m.id, m.sent_at
+    FROM messages m
+    WHERE m.conversation_id = $1
+    ORDER BY m.sent_at DESC, m.id DESC
+    LIMIT 1
+) AS last_message,
+(
+    SELECT COUNT(*) AS cnt
+    FROM messages m
+    WHERE m.conversation_id = $1
+      AND m.contact_id IS NOT NULL
+      AND m.read_at IS NULL
+) AS unread_count
+WHERE c.id = $1;
+
+-- name: FindConversationWithContactByID :one
+SELECT
+    c.id,
+    c.status,
+    c.user_id,
+    c.created_at,
+    c.updated_at,
+    c.finished_at,
+    c.unread_count,
+    ct.id AS contact_id,
+    ct.external_contact_id
+FROM conversations c
+JOIN contacts ct ON ct.id = c.contact_id
+WHERE c.id = $1;
+
+-- name: ListConversationsForAgent :many
+SELECT
+    c.id,
+    c.status,
+    c.last_message_at,
+    c.unread_count,
+    ct.id AS contact_id,
+    ct.external_contact_id,
+    lm.status AS last_message_status,
+    lm.text AS last_message_text,
+    CASE WHEN lm.user_id IS NOT NULL THEN 'agent' ELSE 'contact' END AS last_message_owner
+FROM conversations c
+JOIN contacts ct ON ct.id = c.contact_id
+JOIN messages lm ON lm.id = c.last_message_id
+WHERE (c.status = 'pending' OR c.user_id = sqlc.arg('agent_id'))
+  AND c.status = ANY(sqlc.arg('statuses')::text[])
+  AND (sqlc.narg('contact_id')::uuid IS NULL OR c.contact_id = sqlc.narg('contact_id'))
+  AND (
+      sqlc.narg('before_sent_at')::timestamptz IS NULL
+      OR (c.last_message_at, c.id) < (sqlc.narg('before_sent_at')::timestamptz, sqlc.narg('before_id')::uuid)
+  )
+ORDER BY c.last_message_at DESC, c.id DESC
+LIMIT sqlc.arg('page_size')::int + 1;

@@ -19,8 +19,8 @@ SET created_at = EXCLUDED.created_at
 `
 
 type CreateUserParams struct {
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        pgtype.UUID
+	CreatedAt pgtype.Timestamptz
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {

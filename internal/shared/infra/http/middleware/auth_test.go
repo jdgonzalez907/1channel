@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"uuid"
+
+	usersdomain "github.com/jdgonzalez907/1channel/internal/modules/users/domain"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -15,6 +18,7 @@ func TestAuth(t *testing.T) {
 	tests := []struct {
 		name       string
 		header     string
+		lookupErr  error
 		wantStatus int
 		wantID     uuid.UUID
 	}{
@@ -44,6 +48,18 @@ func TestAuth(t *testing.T) {
 			wantStatus: http.StatusOK,
 			wantID:     validID,
 		},
+		{
+			name:       "unknown user",
+			header:     "Bearer " + validID.String(),
+			lookupErr:  usersdomain.ErrUserNotFound,
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "lookup failure",
+			header:     "Bearer " + validID.String(),
+			lookupErr:  assert.AnError,
+			wantStatus: http.StatusInternalServerError,
+		},
 	}
 
 	for _, tt := range tests {
@@ -56,13 +72,15 @@ func TestAuth(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
+			lookup := func(context.Context, uuid.UUID) error { return tt.lookupErr }
+
 			req := httptest.NewRequest(http.MethodPost, "/v1/users", nil)
 			if tt.header != "" {
 				req.Header.Set("Authorization", tt.header)
 			}
 
 			rec := httptest.NewRecorder()
-			Auth(next).ServeHTTP(rec, req)
+			Auth(lookup)(next).ServeHTTP(rec, req)
 
 			assert.Equal(t, tt.wantStatus, rec.Code)
 

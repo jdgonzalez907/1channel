@@ -19,7 +19,7 @@ func TimestampPtr(t *time.Time) pgtype.Timestamptz {
 }
 
 func FromTimestamp(p pgtype.Timestamptz) time.Time {
-	return p.Time
+	return p.Time.UTC()
 }
 
 func FromTimestampPtr(p pgtype.Timestamptz) *time.Time {
@@ -27,6 +27,6 @@ func FromTimestampPtr(p pgtype.Timestamptz) *time.Time {
 		return nil
 	}
 
-	t := p.Time
+	t := p.Time.UTC()
 	return &t
 }

@@ -6,6 +6,7 @@ import (
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb"
@@ -30,7 +31,7 @@ func (r *postgresConversationRepository) FindWithoutMessages(ctx context.Context
 		return nil, err
 	}
 
-	return toConversation(row, nil), nil
+	return toConversation(row.ID, row.Status, row.UserID, row.ContactID, row.CreatedAt, row.UpdatedAt, row.FinishedAt, nil), nil
 }
 
 func (r *postgresConversationRepository) FindOpenWithMessageExternalIDsByContactID(ctx context.Context, contactID uuid.UUID) (*domain.Conversation, error) {
@@ -48,7 +49,7 @@ func (r *postgresConversationRepository) FindOpenWithMessageExternalIDsByContact
 		return nil, err
 	}
 
-	return toConversation(row, toMessages(messageRows)), nil
+	return toConversation(row.ID, row.Status, row.UserID, row.ContactID, row.CreatedAt, row.UpdatedAt, row.FinishedAt, toMessages(messageRows)), nil
 }
 
 func (r *postgresConversationRepository) FindWithContactUnreadMessagesByID(ctx context.Context, id uuid.UUID) (*domain.Conversation, error) {
@@ -66,7 +67,7 @@ func (r *postgresConversationRepository) FindWithContactUnreadMessagesByID(ctx c
 		return nil, err
 	}
 
-	return toConversation(row, toMessages(messageRows)), nil
+	return toConversation(row.ID, row.Status, row.UserID, row.ContactID, row.CreatedAt, row.UpdatedAt, row.FinishedAt, toMessages(messageRows)), nil
 }
 
 func (r *postgresConversationRepository) FindWithMessageByExternalID(ctx context.Context, externalMessageID string) (*domain.Conversation, error) {
@@ -88,10 +89,12 @@ func (r *postgresConversationRepository) FindWithMessageByExternalID(ctx context
 		return nil, err
 	}
 
-	return toConversation(conversationRow, []*domain.Message{toMessage(messageRow)}), nil
+	return toConversation(conversationRow.ID, conversationRow.Status, conversationRow.UserID, conversationRow.ContactID, conversationRow.CreatedAt, conversationRow.UpdatedAt, conversationRow.FinishedAt, []*domain.Message{toMessage(messageRow)}), nil
 }
 
 func (r *postgresConversationRepository) Save(ctx context.Context, conversation *domain.Conversation) error {
+	dirtyMessages := conversation.DirtyMessages()
+
 	return r.db.InTx(ctx, func(q *sqlc.Queries) error {
 		if err := q.UpsertConversation(ctx, sqlc.UpsertConversationParams{
 			ID:         pgdb.UUID(conversation.ID()),
@@ -105,8 +108,14 @@ func (r *postgresConversationRepository) Save(ctx context.Context, conversation 
 			return err
 		}
 
-		for _, message := range conversation.DirtyMessages() {
+		for _, message := range dirtyMessages {
 			if err := q.UpsertMessage(ctx, toUpsertMessageParams(message, conversation.ID())); err != nil {
+				return err
+			}
+		}
+
+		if len(dirtyMessages) > 0 {
+			if err := q.RefreshConversationLastMessage(ctx, pgdb.UUID(conversation.ID())); err != nil {
 				return err
 			}
 		}
@@ -115,16 +124,25 @@ func (r *postgresConversationRepository) Save(ctx context.Context, conversation 
 	})
 }
 
-func toConversation(row sqlc.Conversation, messages []*domain.Message) *domain.Conversation {
+func toConversation(
+	id pgtype.UUID,
+	status string,
+	userID pgtype.UUID,
+	contactID pgtype.UUID,
+	createdAt pgtype.Timestamptz,
+	updatedAt pgtype.Timestamptz,
+	finishedAt pgtype.Timestamptz,
+	messages []*domain.Message,
+) *domain.Conversation {
 	return domain.RehydrateConversation(
-		pgdb.FromUUID(row.ID),
-		domain.ConversationStatus(row.Status),
+		pgdb.FromUUID(id),
+		domain.ConversationStatus(status),
 		messages,
-		pgdb.FromUUIDPtr(row.UserID),
-		pgdb.FromUUIDPtr(row.ContactID),
-		pgdb.FromTimestamp(row.CreatedAt),
-		pgdb.FromTimestampPtr(row.UpdatedAt),
-		pgdb.FromTimestampPtr(row.FinishedAt),
+		pgdb.FromUUIDPtr(userID),
+		pgdb.FromUUIDPtr(contactID),
+		pgdb.FromTimestamp(createdAt),
+		pgdb.FromTimestampPtr(updatedAt),
+		pgdb.FromTimestampPtr(finishedAt),
 	)
 }
 

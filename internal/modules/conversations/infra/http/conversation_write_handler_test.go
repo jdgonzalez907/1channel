@@ -16,14 +16,13 @@ import (
 
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
-	"github.com/jdgonzalez907/1channel/internal/modules/users"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/middleware"
 )
 
-func newConversationRouter(h *ConversationHandler) chi.Router {
+func newConversationRouter(h *ConversationWriteHandler) chi.Router {
 	router := chi.NewRouter()
 	router.Group(func(r chi.Router) {
-		r.Use(middleware.Auth)
+		r.Use(middleware.Auth(func(context.Context, uuid.UUID) error { return nil }))
 		h.Register(r)
 	})
 
@@ -49,7 +48,7 @@ func doConversationRequest(router chi.Router, method, path, body string, agentID
 	return rec
 }
 
-func TestConversationHandler_SendMessage(t *testing.T) {
+func TestConversationWriteHandler_SendMessage(t *testing.T) {
 	agentID := uuid.NewV7()
 	conversationID := uuid.NewV7()
 	sendErr := errors.New("send failure")
@@ -149,18 +148,6 @@ func TestConversationHandler_SendMessage(t *testing.T) {
 			wantStatus: http.StatusUnprocessableEntity,
 		},
 		{
-			name:    "unknown user",
-			path:    "/conversations/" + conversationID.String() + "/messages",
-			body:    `{"text":"hola"}`,
-			agentID: &agentID,
-			setup: func(t *testing.T, m *app.MockSendAgentMessage) {
-				t.Helper()
-				m.On("Execute", mock.Anything, mock.Anything).
-					Return(errors.Join(app.ErrSendingAgentMessage, users.ErrUserNotFound)).Once()
-			},
-			wantStatus: http.StatusUnauthorized,
-		},
-		{
 			name:    "use case error returns 500",
 			path:    "/conversations/" + conversationID.String() + "/messages",
 			body:    `{"text":"hola"}`,
@@ -191,7 +178,7 @@ func TestConversationHandler_SendMessage(t *testing.T) {
 			send := &app.MockSendAgentMessage{}
 			tt.setup(t, send)
 
-			router := newConversationRouter(NewConversationHandler(send, &app.MockAgentReadConversation{}, &app.MockResolveConversation{}))
+			router := newConversationRouter(NewConversationWriteHandler(send, &app.MockAgentReadConversation{}, &app.MockResolveConversation{}))
 
 			// Act
 			rec := doConversationRequest(router, http.MethodPost, tt.path, tt.body, tt.agentID)
@@ -210,7 +197,7 @@ func TestConversationHandler_SendMessage(t *testing.T) {
 	}
 }
 
-func TestConversationHandler_UpdateMessages(t *testing.T) {
+func TestConversationWriteHandler_UpdateMessages(t *testing.T) {
 	agentID := uuid.NewV7()
 	conversationID := uuid.NewV7()
 
@@ -259,7 +246,7 @@ func TestConversationHandler_UpdateMessages(t *testing.T) {
 			read := &app.MockAgentReadConversation{}
 			tt.setup(t, read)
 
-			router := newConversationRouter(NewConversationHandler(&app.MockSendAgentMessage{}, read, &app.MockResolveConversation{}))
+			router := newConversationRouter(NewConversationWriteHandler(&app.MockSendAgentMessage{}, read, &app.MockResolveConversation{}))
 
 			// Act
 			rec := doConversationRequest(router, http.MethodPatch, "/conversations/"+conversationID.String()+"/messages", tt.body, tt.agentID)
@@ -271,7 +258,7 @@ func TestConversationHandler_UpdateMessages(t *testing.T) {
 	}
 }
 
-func TestConversationHandler_UpdateConversation(t *testing.T) {
+func TestConversationWriteHandler_UpdateConversation(t *testing.T) {
 	agentID := uuid.NewV7()
 	conversationID := uuid.NewV7()
 
@@ -331,7 +318,7 @@ func TestConversationHandler_UpdateConversation(t *testing.T) {
 			resolve := &app.MockResolveConversation{}
 			tt.setup(t, resolve)
 
-			router := newConversationRouter(NewConversationHandler(&app.MockSendAgentMessage{}, &app.MockAgentReadConversation{}, resolve))
+			router := newConversationRouter(NewConversationWriteHandler(&app.MockSendAgentMessage{}, &app.MockAgentReadConversation{}, resolve))
 
 			// Act
 			rec := doConversationRequest(router, http.MethodPatch, "/conversations/"+conversationID.String(), tt.body, tt.agentID)

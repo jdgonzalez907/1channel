@@ -4,45 +4,138 @@
 
 **1Channel** is a conversational multi-agent, multi-channel CRM system built with Go. It's platform-agnostic and designed as a modular monolith following Clean Architecture and Domain-Driven Design (DDD) principles.
 
+A contact (customer) talks to the company through a channel; an agent (system user) answers. Conversations are short support/sales threads. The current REST API is internal and first-party (the same person builds front and back), so pragmatic decisions beat over-engineering.
+
 ## Architecture & Structure
 
 ### Directory Layout
 ```
-├── cmd/api/                    # Application entrypoint (main.go)
-├── internal/                   # Core business logic
-│   └── module/                 # Each module follows this structure
-│       ├── api.go              # Public interface (shared with other modules, low coupling)
-│       ├── app/                # Use cases (application services)
-│       ├── domain/             # Aggregates, entities, value objects, repository interfaces
-│       └── infra/              # Implementations (DB, HTTP handlers, event handlers)
-├── db/                         # Database layer
-│   ├── migrations/             # SQL migration files (golang-migrate)
+├── cmd/api/                    # Application entrypoint (main.go, router, config)
+├── internal/
+│   ├── modules/                # Business modules (one per bounded context)
+│   │   └── <module>/           # e.g. contacts, conversations, users
+│   │       ├── api.go          # Public write API consumed by other modules
+│   │       ├── app/            # Use cases (application services)
+│   │       ├── domain/         # Aggregates, entities, value objects, repository ports
+│   │       └── infra/          # Adapters: pg repositories, http handlers
+│   └── shared/infra/           # Cross-cutting infra
+│       ├── http/httperror/     # problem+json helpers
+│       ├── http/httputil/      # JSON, path params, lookup errors
+│       ├── http/middleware/    # Auth, logging, timeout
+│       └── pgdb/               # pgx pool, sqlc wrapper, UUID/time helpers
+├── db/
+│   ├── migrations/             # golang-migrate SQL files
 │   └── queries/                # SQLC query definitions
-├── openspec/                   # Specification-driven development
-│   ├── specs/                  # Domain specifications
-│   └── changes/                # Change requests and archives
-├── docker-compose.yml          # Docker services (postgres 18 + migrate)
-└── .github/workflows/          # CI/CD pipelines
+├── openspec/                   # Spec-driven development (source of truth)
+│   ├── specs/                  # Durable capability specs
+│   └── changes/                # In-flight changes + archive
+├── docker-compose.yml          # postgres 18 + migrate
+└── .github/workflows/          # CI/CD
 ```
 
 ### Module Design Principles
-- **api.go**: Defines the public interface that other modules can depend on (prevents tight coupling)
-- **Low coupling**: Modules communicate through interfaces, not direct dependencies
-- **High cohesion**: Each module encapsulates its own domain logic
+- **api.go**: defines the public interface other modules may depend on (write use cases only). Keeps modules decoupled.
+- **Low coupling / high cohesion**: modules talk to each other only through their `api.go`, never through each other's `app`/`domain`/`infra`.
+- **Reads do not cross modules**: read endpoints resolve their own data straight from SQLC (see below).
+
+### Layer Dependency Rule
+```
+  domain / app   SHALL NOT import infra
+  infra          MAY import domain / app   (infra -> domain is valid)
+  shared/infra MAY import a module's domain (infra -> domain)
+```
+- The forbidden direction is **domain -> infra**. Never the other way around.
+- Crossing a *module* boundary still goes through `api.go`, even if the direction (infra -> domain) is allowed.
 
 ### Key Technical Decisions
 - **Language**: Go 1.27
-- **Database**: PostgreSQL 18 with SQLC for type-safe queries
-- **Migrations**: golang-migrate/migrate, applied on demand via `make migrate-up`
-- **Timestamps**: UTC end to end (Postgres `timezone=UTC`, pgx `ScanLocation=time.UTC`)
-- **Architecture**: Modular monolith with Clean Architecture layers
-- **API**: RESTful HTTP API (port 8080 by default)
+- **Database**: PostgreSQL 18 with SQLC
+- **Migrations**: golang-migrate; in dev they are edited in place and the DB is recreated (nothing is in production yet)
+- **Timestamps**: UTC end to end (Postgres `timezone=UTC`, pgx `ScanLocation=time.UTC`, `pgdb.FromTimestamp` normalizes)
+- **Architecture**: modular monolith with Clean Architecture layers
+- **API**: RESTful HTTP (port 8080)
+- **SQLC**: `emit_json_tags: false` — generated structs are row types and are never serialized
+- **Reads**: HTTP handler -> `*sqlc.Queries` directly -> Response DTO (no app/domain/repository)
+- **Pagination**: explicit `before_sent_at` / `before_id` (+ `next_before_sent_at` / `next_before_id`), not an opaque cursor
 - **Containerization**: Docker + Docker Compose
+
+## Domain Model & Business Rules
+
+### Entities
+```
+  User (agent)    id, created_at
+  Contact         id, external_contact_id (channel id), created_at
+  Conversation    id, status, user_id?, contact_id?, created_at, updated_at?,
+                  finished_at?, last_message_at, last_message_id, unread_count
+  Message         id, conversation_id, status, type, text?, user_id?,
+                  contact_id?, external_id?, sent_at, read_at?, edited_at?, deleted_at?
+```
+
+### States
+```
+  conversation: pending | assigned | expired | resolved
+  message:      sent | read | deleted | failed
+  message type: text   (MVP)
+```
+
+### Conversation lifecycle
+```
+  pending --(agent replies)--> assigned
+  pending/assigned --(expires)--> expired
+  assigned --(agent resolves)--> resolved
+  expired/resolved = finished (finished_at required)
+```
+
+### Business rules
+- Each conversation has **at most one assigned agent**.
+- Every conversation is born with **at least one message** (no empty conversation).
+- A contact has **at most one open conversation** (`pending`/`assigned`).
+- The contact is resolved or created by its `external_contact_id`.
+- A message has **exactly one owner**: agent XOR contact. Text is 1..1000 graphemes.
+- Replying to a `pending` conversation with no agent assigns that agent and moves it to `assigned`.
+- If the external channel send fails, the agent message becomes `failed` (terminal, blocks edits) and the operation returns an error.
+- Edit/delete: only the owner; edits with a timestamp `<=` the last applied edit are discarded; delete is idempotent; the contact may edit/delete even on a finished conversation.
+- Marking read: only the assigned agent, only the contact's messages, and it works on finished conversations too.
+- Expire and resolve are idempotent. Resolve is only allowed by the assigned agent.
+- `updated_at` only moves forward.
+- `unread_count` counts the contact's messages with `read_at` null, **including deleted ones** (a deletion is still an interaction by the contact).
+- `deleted`: the text is **not** erased in the DB; the API exposes it as `null`.
+- Timestamps are always UTC.
+
+### Inbox read model
+- Ordered by the last message `(sent_at, id)` descending.
+- Visible = `pending` OR assigned to the requester.
+- Row: contact (`id`, `external_id`), last-message preview (`text`, `sent_at`, `owner`), `unread_count`.
+- Maintained denormalized on `conversations` (`last_message_at`, `last_message_id`, `unread_count`) by `RefreshConversationLastMessage` inside `Save`'s transaction, only when there are modified messages.
+
+## REST API
+
+### Write (`http-api`)
+```
+  POST   /v1/users                              -> 201 {id}          (public, bootstrap)
+  POST   /v1/conversations/{id}/messages        -> 201 {id}
+  PATCH  /v1/conversations/{id}/messages        -> 204   ({"status":"read"})
+  PATCH  /v1/conversations/{id}                 -> 204   ({"status":"resolved"})
+```
+An agent cannot `expired` via HTTP (422).
+
+### Read (`http-read-api`)
+```
+  GET /v1/conversations[?status=open|finished&external_contact_id=&before_*]
+  GET /v1/conversations/{id}[?before_*]
+  GET /v1/contacts/{id}
+  GET /v1/users/{id}
+```
+
+### Auth & errors
+- `Authorization: Bearer <user id>`; missing/malformed/nonexistent user -> 401. Existence is validated once in `Auth`.
+- Errors use `Content-Type: application/problem+json` with `title`, `status`, `detail`, `instance`.
+- Code mapping: 400 malformed/position, 401 auth, 403 ownership, 404 missing, 409 state conflict, 422 validation, 500 internal, 504 timeout.
 
 ## Development Commands
 
 ### Docker Environment
-Compose levanta solo datos; la app corre en el host con `go run` para iterar rapido.
+Compose raises data only; the app runs on the host with `go run` for fast iteration.
 
 ```bash
 make up                    # Start postgres 18 (UTC) in background
@@ -50,36 +143,41 @@ make down                  # Stop services
 docker compose ps          # Status and healthcheck
 docker compose logs -f postgres
 make migrate-up            # Apply migrations on demand
+make reset                 # Recreate DB from scratch
 ```
 
-Si `docker` pide permisos: `make DOCKER="sudo docker" up` (o agrega tu usuario al grupo `docker`).
+If `docker` asks for permissions: `make DOCKER="sudo docker" up` (or add your user to the `docker` group). Note: with passworded sudo, `make` may not work non-interactively; the `migrate` CLI against `localhost:5432` is the fallback (see below).
 
-### Essential Commands (inside container or local)
+### Essential Commands (host or container)
 ```bash
-# Build and run
-go build ./cmd/api              # Build the application
-go run ./cmd/api                # Run directly
+go build ./...                  # Compile everything
+go run ./cmd/api                # Run the app (needs .env sourced)
+go build ./cmd/api              # Build only the binary
 
 # Quality gates (MUST pass locally before push)
-go mod verify                   # Verify dependencies
-gofmt -l .                      # Check formatting (must be clean)
-go vet ./...                    # Static analysis
-go build ./...                  # Verify compilation
-go test -race -count=1 ./...    # Run tests with race detection
+go mod verify
+gofmt -l .                      # Must be clean
+go vet ./...
+go build ./...
+go test -race -count=1 ./...
 
-# Database (SQLC)
-sqlc generate                   # Generate Go code from SQL queries
+# SQLC (regenerate after changing db/queries/*.sql)
+sqlc generate
 
-# Migrations (golang-migrate, run on demand via Docker)
+# Migrations
 make migrate-up
 make migrate-down
 make migrate-create NAME=migration_name
 ```
 
-### Single Test Execution
+`sqlc` and `migrate` may not be on `PATH`: they live in `$(go env GOPATH)/bin`.
+
+### Migrations without Docker
 ```bash
-go test -run TestFunctionName ./path/to/package
-go test -v -count=1 ./...      # Verbose output
+export PATH="$PATH:$(go env GOPATH)/bin"
+DSN="postgres://dev:dev@localhost:5432/1channel_dev?sslmode=disable"
+migrate -path db/migrations -database "$DSN" up
+migrate -path db/migrations -database "$DSN" down 2   # then up to re-apply edited files
 ```
 
 ## Environment Setup
@@ -88,12 +186,10 @@ go test -v -count=1 ./...      # Verbose output
 Copy `.env.example` to `.env`. The app does not load `.env` itself: `make run` sources it, and Docker Compose autoloads it for interpolation.
 
 ```bash
-# Application
 HTTP_PORT=8080
 LOG_LEVEL=debug
 TZ=UTC
 
-# Database (local; the app runs on the host)
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
 POSTGRES_DATABASE=1channel_dev
@@ -108,77 +204,64 @@ Integration variables (`META_*`, `WHATSAPP_*`, `ONECHANNEL_SECRET`) are intentio
 ### Database Setup
 1. Start PostgreSQL: `make up`
 2. Run migrations: `make migrate-up`
-3. Generate SQLC code: `sqlc generate` (requires `sqlc` installed)
+3. Generate SQLC code: `sqlc generate`
 
 ## CI/CD Pipeline
 
 ### Quality Gates (GitHub Actions)
 The CI runs these checks in order:
-1. `go mod verify` - Dependency integrity
-2. `gofmt -l .` - Code formatting (must be gofmt-clean)
-3. `go vet ./...` - Static analysis
-4. `go build ./...` - Compilation check
-5. `go test -race -count=1 ./...` - Tests with race detection
+1. `go mod verify`
+2. `gofmt -l .` (must be clean)
+3. `go vet ./...`
+4. `go build ./...`
+5. `go test -race -count=1 ./...`
+
+CI has **no database**: tests must not require one.
 
 ### Docker Build
 - Multi-stage build with Go 1.27-alpine
-- Final image: Alpine 3.24 with minimal footprint
-- Exposes port 8080
-- Runs as non-root user `app`
+- Final image: Alpine 3.24, non-root user `app`, port 8080
 
 ## Git Workflow (Git Flow - Manual)
 
 ### Branch Strategy
 ```
-main              # Production-ready code
-develop           # Integration branch
-feature/*         # New features (branch from develop)
-release/*         # Release preparation (branch from develop)
-hotfix/*          # Production fixes (branch from main)
+main              # Production-ready
+develop           # Integration
+feature/*         # from develop
+release/*         # from develop
+hotfix/*          # from main
 ```
 
 ### Common Workflows
 ```bash
-# Start new feature
-git checkout develop
-git pull origin develop
+# Feature
+git checkout develop && git pull origin develop
 git checkout -b feature/my-feature
+# ... finish ...
+git checkout develop && git merge --no-ff feature/my-feature
+git push origin develop && git branch -d feature/my-feature
 
-# Finish feature
-git checkout develop
-git merge --no-ff feature/my-feature
-git push origin develop
-git branch -d feature/my-feature
-
-# Start release
-git checkout develop
-git checkout -b release/v1.0.0
-
-# Finish release
-git checkout main
-git merge --no-ff release/v1.0.0
+# Release
+git checkout -b release/v1.0.0 develop
+git checkout main && git merge --no-ff release/v1.0.0
 git tag -a v1.0.0 -m "Release v1.0.0"
-git checkout develop
-git merge --no-ff release/v1.0.0
-git branch -d release/v1.0.0
+git checkout develop && git merge --no-ff release/v1.0.0
 
 # Hotfix
-git checkout main
-git checkout -b hotfix/critical-fix
-# ... fix ...
-git checkout main
-git merge --no-ff hotfix/critical-fix
-git checkout develop
-git merge --no-ff hotfix/critical-fix
-git branch -d hotfix/critical-fix
+git checkout -b hotfix/critical-fix main
+git checkout main && git merge --no-ff hotfix/critical-fix
+git checkout develop && git merge --no-ff hotfix/critical-fix
 ```
 
 ## Testing Strategy
 
-### Test Framework & Patterns
-- **Library**: testify (`github.com/stretchr/testify`)
-- **Pattern**: AAA (Arrange-Act-Assert)
-- **Style**: Table-driven tests for parameterized testing
+### Principles
+- **Unit tests only.** No integration tests, no tests that need a database. CI has no Postgres.
+- **Library**: testify; **pattern**: AAA; **style**: table-driven.
+- **Writes**: the handler depends on `app` use-case interfaces; those are mocked with testify.
+- **Reads**: no interfaces and no mocks (infra -> infra). Only the pure logic is unit-tested: tab/status parsing, visibility, pagination position parsing, and row->Response mapping.
+- The read-model refresh (`RefreshConversationLastMessage`) and migrations are not covered by automated tests; verify them manually.
 
 ### Test Example
 ```go
@@ -189,21 +272,8 @@ func TestUserService_Create(t *testing.T) {
         want    *User
         wantErr bool
     }{
-        {
-            name: "valid input",
-            input: CreateUserInput{
-                Name:  "John Doe",
-                Email: "john@example.com",
-            },
-            want:    &User{Name: "John Doe", Email: "john@example.com"},
-            wantErr: false,
-        },
-        {
-            name:    "empty name",
-            input:   CreateUserInput{Name: "", Email: "john@example.com"},
-            want:    nil,
-            wantErr: true,
-        },
+        {name: "valid input", input: CreateUserInput{Name: "John Doe", Email: "john@example.com"}, wantErr: false},
+        {name: "empty name", input: CreateUserInput{Name: "", Email: "john@example.com"}, wantErr: true},
     }
 
     for _, tt := range tests {
@@ -228,16 +298,9 @@ func TestUserService_Create(t *testing.T) {
 
 ### Test Commands
 ```bash
-# All tests
 go test ./...
-
-# Specific package
-go test ./internal/module/...
-
-# Single test
-go test -run TestFunctionName ./internal/module/...
-
-# With coverage
+go test ./internal/modules/...
+go test -run TestFunctionName ./internal/modules/...
 go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
@@ -245,56 +308,85 @@ go tool cover -html=coverage.out
 ## Development Conventions
 
 ### Code Style
-- **Formatting**: Must be `gofmt`-clean (CI enforces this)
-- **Imports**: Group standard library, external, internal packages
-- **Error handling**: Return errors, don't panic
-- **Naming**: Follow Go conventions (camelCase for private, PascalCase for public)
+- **Formatting**: `gofmt`-clean (CI enforces it)
+- **Imports**: standard library, external, internal groups
+- **Errors**: return, don't panic
+- **Naming**: Go conventions
+
+### Handler & DTO Conventions
+```
+  Files:   <x>_write_handler.go / <x>_read_handler.go
+           write_dto.go / read_dto.go
+  Types:   XWriteHandler / XReadHandler
+           Request (input) / Response (output)   -- never the "DTO" suffix
+  Handlers are symmetric write/read; reads receive `*sqlc.Queries` directly.
+```
+
+### Shared Infra Helpers (reuse, don't duplicate)
+```go
+httputil.RequirePathUUID(w, r, "id", "invalid X id")  // parse {id} else 400
+httputil.LookupError(w, r, err, "X not found")        // IsNoRows -> 404, else 500
+middleware.RequireUserID(w, r)                         // id from context else 401
+middleware.Auth(lookup)                                // bearer + existence -> 401
+pgdb.IsNoRows(err)                                     // errors.Is(err, pgx.ErrNoRows)
+pgdb.UUIDString / UUIDStringPtr / FromTimestamp / FromTimestampPtr
+```
+Rule of thumb: if a block repeats across two or more handlers, move it to `shared/infra`.
+
+### Query Naming
+- SQLC query names describe the data operation; **no `read`/`write` words** (Postgres doesn't know about that).
+
+### Timestamps in Responses
+- Response DTOs use `time.Time` / `*time.Time`; `encoding/json` serializes RFC3339, and `pgdb` normalizes to UTC. **Do not** call `.Format(...)` manually.
 
 ### Architecture Patterns
-- **Domain Layer**: Pure business logic, no dependencies
-- **Application Layer**: Use cases, orchestrates domain objects
-- **Infrastructure Layer**: Implements interfaces defined in domain
-- **Interface Layer**: HTTP handlers, request/response mapping
+- **Domain**: pure business logic; no infra imports
+- **Application**: use cases orchestrating the domain
+- **Infrastructure**: adapters (pg repos, http handlers)
+- **Reads**: handlers query SQLC directly and map to Response
 
-### Database Conventions
-- **Migrations**: Sequential numbered files in `db/migrations/` (format: `000001_name.up.sql` / `000001_name.down.sql`)
-- **Queries**: Type-safe SQL in `db/queries/` with SQLC
-- **Generated Code**: Never edit generated SQLC files manually
+## Working Style (read this before changing anything)
+
+- **MVP**: prefer the direct solution. Don't add layers, abstractions, or "future-proofing" that isn't needed.
+- **infra -> infra = no interfaces**: read handlers depend on `*sqlc.Queries`. No interfaces/mocks for reads.
+- **Unit tests only**: no integration/DB tests. Don't reintroduce them without being asked.
+- **First-party API**: one person controls front and back, so ergonomics favor explicit parameters (e.g., `before_sent_at`/`before_id`) over opaque tokens.
+- **Ask before expanding scope**: don't silently narrow, defer, or simplify specified behavior. If a task needs more than the spec describes, surface it.
+- **Clean Architecture direction**: `infra -> domain` is fine; `domain -> infra` is not.
 
 ## Common Pitfalls & Solutions
 
 ### 1. Formatting Errors
-**Problem**: CI fails on `gofmt` check
-**Solution**: Run `gofmt -w .` before committing
+**Problem**: CI fails on `gofmt`.
+**Solution**: `gofmt -w .` before committing.
 
 ### 2. SQLC Regeneration
-**Problem**: Database code out of sync
-**Solution**: After changing SQL queries, run `sqlc generate`
+**Problem**: DB code out of sync.
+**Solution**: after changing `db/queries/*.sql`, run `sqlc generate`. Never edit generated files.
 
-### 3. Import Cycles
-**Problem**: Go doesn't allow import cycles
-**Solution**: Follow Clean Architecture layer dependencies (domain ← application ← infrastructure ← interfaces)
+### 3. Import Cycles / Layer Violations
+**Problem**: domain importing infra.
+**Solution**: `domain`/`app` must not import `infra`. Cross-module only via `api.go`.
 
 ### 4. Environment Variables
-**Problem**: Application fails to start
-**Solution**: Ensure `.env` file exists with all required variables (see `.env.example`)
+**Problem**: app fails to start.
+**Solution**: `.env` must exist (see `.env.example`); `make run` sources it.
 
 ### 5. Database Connectivity
-**Problem**: App can't connect to database
-**Solution**: On the host use `POSTGRES_HOST=localhost`; the service name `postgres` is only valid inside the Compose network (for example, for the `migrate` service).
+**Problem**: app can't connect.
+**Solution**: host uses `POSTGRES_HOST=localhost`; `postgres` is only the Compose-internal name.
+
+### 6. Edited Migrations Not Applied
+**Problem**: editing an already-applied migration has no effect.
+**Solution**: recreate the DB (`make reset`, or `migrate down <n>` then `up`). Dev only.
 
 ## Working with OpenSpec
 
-This project uses OpenSpec for specification-driven development:
-- **Specifications**: Domain specs in `openspec/specs/`
-- **Changes**: Change requests in `openspec/changes/`
-- **Commands**: Use OpenSpec skills for managing changes
+`openspec/specs/*` is the **source of truth** for behavior. Read the relevant spec before changing behavior; `AGENTS.md` is a summary, not a replacement.
 
-### OpenSpec Workflow
-1. Create specification in `openspec/specs/`
-2. Create change request in `openspec/changes/`
-3. Implement changes following specs
-4. Archive completed changes
+- **Specs**: durable capabilities in `openspec/specs/`
+- **Changes**: proposals/design/tasks in `openspec/changes/` (+ archive)
+- **Workflow**: propose -> apply -> archive; sync delta specs into main specs on archive.
 
 ## Quick Reference
 
@@ -302,47 +394,34 @@ This project uses OpenSpec for specification-driven development:
 ```bash
 make up                         # Start postgres 18 (UTC)
 make migrate-up                 # Apply migrations
-make run                        # go run ./cmd/api, sourcing .env (TZ=UTC)
+make run                        # go run ./cmd/api, sourcing .env
 make down                       # Stop services
 ```
 
-### Quality Gates (run before push)
+### Quality Gates
 ```bash
 go mod verify && gofmt -l . && go vet ./... && go build ./... && go test -race -count=1 ./...
 ```
 
 ### Database
 ```bash
-make migrate-up                 # Apply migrations
-make migrate-down               # Roll back one migration
-make migrate-create NAME=name   # Create a new migration pair
-
-# Generate SQLC code (requires sqlc installed)
+make migrate-up
+make migrate-down
+make migrate-create NAME=name
 sqlc generate
-```
-
-### Git Flow
-```bash
-# Feature
-git checkout -b feature/name develop
-
-# Release
-git checkout -b release/v1.0 develop
-
-# Hotfix
-git checkout -b hotfix/name main
 ```
 
 ## Important Notes
 
-- **Never commit `.env` files** - `.env` and `.env.*` are in `.gitignore` (only `.env.example` is tracked)
-- **Always run quality gates locally** before pushing
-- **SQLC generates code** - don't edit generated files manually
-- **Follow Clean Architecture** - respect layer boundaries
-- **Use OpenSpec** for feature specifications and change management
-- **Run `make migrate-up`** before starting the application with `make run`
-- **App runs on the host** against `localhost`; `postgres` is the Compose-internal service name
-- **Timestamps are UTC**: Postgres runs `timezone=UTC` and pgx decodes `timestamptz` as UTC
+- **Never commit `.env`** — `.env` / `.env.*` are gitignored (only `.env.example` is tracked).
+- **Run quality gates locally** before pushing.
+- **SQLC generates code** — don't edit generated files.
+- **Infra -> domain is allowed; domain -> infra is not.**
+- **Reads bypass app/domain**; writes go through use cases.
+- **Unit tests only**; CI has no database.
+- **Timestamps are UTC**; Response DTOs use `time.Time`.
+- **App runs on the host** against `localhost`; `postgres` only exists inside Compose.
+- **OpenSpec specs are authoritative** for behavior.
 
 ---
 

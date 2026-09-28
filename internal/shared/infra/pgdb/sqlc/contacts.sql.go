@@ -45,9 +45,9 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertContactParams struct {
-	ID                pgtype.UUID        `json:"id"`
-	ExternalContactID string             `json:"external_contact_id"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ID                pgtype.UUID
+	ExternalContactID string
+	CreatedAt         pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertContact(ctx context.Context, arg UpsertContactParams) error {

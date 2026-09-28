@@ -11,15 +11,70 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const findConversationWithContactByID = `-- name: FindConversationWithContactByID :one
+SELECT
+    c.id,
+    c.status,
+    c.user_id,
+    c.created_at,
+    c.updated_at,
+    c.finished_at,
+    c.unread_count,
+    ct.id AS contact_id,
+    ct.external_contact_id
+FROM conversations c
+JOIN contacts ct ON ct.id = c.contact_id
+WHERE c.id = $1
+`
+
+type FindConversationWithContactByIDRow struct {
+	ID                pgtype.UUID
+	Status            string
+	UserID            pgtype.UUID
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	FinishedAt        pgtype.Timestamptz
+	UnreadCount       int32
+	ContactID         pgtype.UUID
+	ExternalContactID string
+}
+
+func (q *Queries) FindConversationWithContactByID(ctx context.Context, id pgtype.UUID) (FindConversationWithContactByIDRow, error) {
+	row := q.db.QueryRow(ctx, findConversationWithContactByID, id)
+	var i FindConversationWithContactByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Status,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.FinishedAt,
+		&i.UnreadCount,
+		&i.ContactID,
+		&i.ExternalContactID,
+	)
+	return i, err
+}
+
 const findConversationWithContactUnreadMessagesByID = `-- name: FindConversationWithContactUnreadMessagesByID :one
 SELECT id, status, user_id, contact_id, created_at, updated_at, finished_at
 FROM conversations
 WHERE id = $1
 `
 
-func (q *Queries) FindConversationWithContactUnreadMessagesByID(ctx context.Context, id pgtype.UUID) (Conversation, error) {
+type FindConversationWithContactUnreadMessagesByIDRow struct {
+	ID         pgtype.UUID
+	Status     string
+	UserID     pgtype.UUID
+	ContactID  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}
+
+func (q *Queries) FindConversationWithContactUnreadMessagesByID(ctx context.Context, id pgtype.UUID) (FindConversationWithContactUnreadMessagesByIDRow, error) {
 	row := q.db.QueryRow(ctx, findConversationWithContactUnreadMessagesByID, id)
-	var i Conversation
+	var i FindConversationWithContactUnreadMessagesByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
@@ -38,9 +93,19 @@ FROM conversations
 WHERE id = $1
 `
 
-func (q *Queries) FindConversationWithoutMessages(ctx context.Context, id pgtype.UUID) (Conversation, error) {
+type FindConversationWithoutMessagesRow struct {
+	ID         pgtype.UUID
+	Status     string
+	UserID     pgtype.UUID
+	ContactID  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}
+
+func (q *Queries) FindConversationWithoutMessages(ctx context.Context, id pgtype.UUID) (FindConversationWithoutMessagesRow, error) {
 	row := q.db.QueryRow(ctx, findConversationWithoutMessages, id)
-	var i Conversation
+	var i FindConversationWithoutMessagesRow
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
@@ -61,9 +126,19 @@ WHERE contact_id = $1
 LIMIT 1
 `
 
-func (q *Queries) FindOpenConversationWithMessageExternalIDsByContactID(ctx context.Context, contactID pgtype.UUID) (Conversation, error) {
+type FindOpenConversationWithMessageExternalIDsByContactIDRow struct {
+	ID         pgtype.UUID
+	Status     string
+	UserID     pgtype.UUID
+	ContactID  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
+}
+
+func (q *Queries) FindOpenConversationWithMessageExternalIDsByContactID(ctx context.Context, contactID pgtype.UUID) (FindOpenConversationWithMessageExternalIDsByContactIDRow, error) {
 	row := q.db.QueryRow(ctx, findOpenConversationWithMessageExternalIDsByContactID, contactID)
-	var i Conversation
+	var i FindOpenConversationWithMessageExternalIDsByContactIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Status,
@@ -74,6 +149,116 @@ func (q *Queries) FindOpenConversationWithMessageExternalIDsByContactID(ctx cont
 		&i.FinishedAt,
 	)
 	return i, err
+}
+
+const listConversationsForAgent = `-- name: ListConversationsForAgent :many
+SELECT
+    c.id,
+    c.status,
+    c.last_message_at,
+    c.unread_count,
+    ct.id AS contact_id,
+    ct.external_contact_id,
+    lm.status AS last_message_status,
+    lm.text AS last_message_text,
+    CASE WHEN lm.user_id IS NOT NULL THEN 'agent' ELSE 'contact' END AS last_message_owner
+FROM conversations c
+JOIN contacts ct ON ct.id = c.contact_id
+JOIN messages lm ON lm.id = c.last_message_id
+WHERE (c.status = 'pending' OR c.user_id = $1)
+  AND c.status = ANY($2::text[])
+  AND ($3::uuid IS NULL OR c.contact_id = $3)
+  AND (
+      $4::timestamptz IS NULL
+      OR (c.last_message_at, c.id) < ($4::timestamptz, $5::uuid)
+  )
+ORDER BY c.last_message_at DESC, c.id DESC
+LIMIT $6::int + 1
+`
+
+type ListConversationsForAgentParams struct {
+	AgentID      pgtype.UUID
+	Statuses     []string
+	ContactID    pgtype.UUID
+	BeforeSentAt pgtype.Timestamptz
+	BeforeID     pgtype.UUID
+	PageSize     int32
+}
+
+type ListConversationsForAgentRow struct {
+	ID                pgtype.UUID
+	Status            string
+	LastMessageAt     pgtype.Timestamptz
+	UnreadCount       int32
+	ContactID         pgtype.UUID
+	ExternalContactID string
+	LastMessageStatus string
+	LastMessageText   *string
+	LastMessageOwner  string
+}
+
+func (q *Queries) ListConversationsForAgent(ctx context.Context, arg ListConversationsForAgentParams) ([]ListConversationsForAgentRow, error) {
+	rows, err := q.db.Query(ctx, listConversationsForAgent,
+		arg.AgentID,
+		arg.Statuses,
+		arg.ContactID,
+		arg.BeforeSentAt,
+		arg.BeforeID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationsForAgentRow{}
+	for rows.Next() {
+		var i ListConversationsForAgentRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.LastMessageAt,
+			&i.UnreadCount,
+			&i.ContactID,
+			&i.ExternalContactID,
+			&i.LastMessageStatus,
+			&i.LastMessageText,
+			&i.LastMessageOwner,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const refreshConversationLastMessage = `-- name: RefreshConversationLastMessage :exec
+UPDATE conversations c
+SET last_message_id = last_message.id,
+    last_message_at = last_message.sent_at,
+    unread_count = unread_count.cnt
+FROM (
+    SELECT m.id, m.sent_at
+    FROM messages m
+    WHERE m.conversation_id = $1
+    ORDER BY m.sent_at DESC, m.id DESC
+    LIMIT 1
+) AS last_message,
+(
+    SELECT COUNT(*) AS cnt
+    FROM messages m
+    WHERE m.conversation_id = $1
+      AND m.contact_id IS NOT NULL
+      AND m.read_at IS NULL
+) AS unread_count
+WHERE c.id = $1
+`
+
+func (q *Queries) RefreshConversationLastMessage(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, refreshConversationLastMessage, id)
+	return err
 }
 
 const upsertConversation = `-- name: UpsertConversation :exec
@@ -88,13 +273,13 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertConversationParams struct {
-	ID         pgtype.UUID        `json:"id"`
-	Status     string             `json:"status"`
-	UserID     pgtype.UUID        `json:"user_id"`
-	ContactID  pgtype.UUID        `json:"contact_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	ID         pgtype.UUID
+	Status     string
+	UserID     pgtype.UUID
+	ContactID  pgtype.UUID
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+	FinishedAt pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertConversation(ctx context.Context, arg UpsertConversationParams) error {

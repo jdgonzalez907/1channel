@@ -37,6 +37,84 @@ func (q *Queries) FindMessageByExternalID(ctx context.Context, externalID *strin
 	return i, err
 }
 
+const listConversationMessagesPage = `-- name: ListConversationMessagesPage :many
+SELECT
+    id,
+    status,
+    type,
+    text,
+    user_id,
+    contact_id,
+    sent_at,
+    read_at,
+    edited_at,
+    deleted_at
+FROM messages
+WHERE conversation_id = $1
+  AND (
+      $2::timestamptz IS NULL
+      OR (sent_at, id) < ($2::timestamptz, $3::uuid)
+  )
+ORDER BY sent_at DESC, id DESC
+LIMIT $4::int + 1
+`
+
+type ListConversationMessagesPageParams struct {
+	ConversationID pgtype.UUID
+	BeforeSentAt   pgtype.Timestamptz
+	BeforeID       pgtype.UUID
+	PageSize       int32
+}
+
+type ListConversationMessagesPageRow struct {
+	ID        pgtype.UUID
+	Status    string
+	Type      string
+	Text      *string
+	UserID    pgtype.UUID
+	ContactID pgtype.UUID
+	SentAt    pgtype.Timestamptz
+	ReadAt    pgtype.Timestamptz
+	EditedAt  pgtype.Timestamptz
+	DeletedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ListConversationMessagesPage(ctx context.Context, arg ListConversationMessagesPageParams) ([]ListConversationMessagesPageRow, error) {
+	rows, err := q.db.Query(ctx, listConversationMessagesPage,
+		arg.ConversationID,
+		arg.BeforeSentAt,
+		arg.BeforeID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConversationMessagesPageRow{}
+	for rows.Next() {
+		var i ListConversationMessagesPageRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Status,
+			&i.Type,
+			&i.Text,
+			&i.UserID,
+			&i.ContactID,
+			&i.SentAt,
+			&i.ReadAt,
+			&i.EditedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMessagesWithExternalIDByConversation = `-- name: ListMessagesWithExternalIDByConversation :many
 SELECT id, conversation_id, status, type, text, user_id, contact_id, external_id, sent_at, read_at, edited_at, deleted_at
 FROM messages
@@ -137,18 +215,18 @@ ON CONFLICT (id) DO UPDATE SET
 `
 
 type UpsertMessageParams struct {
-	ID             pgtype.UUID        `json:"id"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
-	Status         string             `json:"status"`
-	Type           string             `json:"type"`
-	Text           *string            `json:"text"`
-	UserID         pgtype.UUID        `json:"user_id"`
-	ContactID      pgtype.UUID        `json:"contact_id"`
-	ExternalID     *string            `json:"external_id"`
-	SentAt         pgtype.Timestamptz `json:"sent_at"`
-	ReadAt         pgtype.Timestamptz `json:"read_at"`
-	EditedAt       pgtype.Timestamptz `json:"edited_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+	ID             pgtype.UUID
+	ConversationID pgtype.UUID
+	Status         string
+	Type           string
+	Text           *string
+	UserID         pgtype.UUID
+	ContactID      pgtype.UUID
+	ExternalID     *string
+	SentAt         pgtype.Timestamptz
+	ReadAt         pgtype.Timestamptz
+	EditedAt       pgtype.Timestamptz
+	DeletedAt      pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertMessage(ctx context.Context, arg UpsertMessageParams) error {

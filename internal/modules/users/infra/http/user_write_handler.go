@@ -14,19 +14,19 @@ import (
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/httputil"
 )
 
-type UserHandler struct {
+type UserWriteHandler struct {
 	createUser app.CreateUser
 }
 
-func NewUserHandler(createUser app.CreateUser) *UserHandler {
-	return &UserHandler{createUser: createUser}
+func NewUserWriteHandler(createUser app.CreateUser) *UserWriteHandler {
+	return &UserWriteHandler{createUser: createUser}
 }
 
-func (h *UserHandler) Register(r chi.Router) {
+func (h *UserWriteHandler) Register(r chi.Router) {
 	r.Post("/users", h.handleCreateUser)
 }
 
-func (h *UserHandler) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserWriteHandler) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	user, err := h.createUser.Execute(r.Context(), app.CreateUserInput{
 		ID:        uuid.NewV7(),
 		CreatedAt: time.Now().UTC(),
@@ -39,7 +39,7 @@ func (h *UserHandler) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	httputil.JSON(w, http.StatusCreated, UserResponse{ID: user.ID().String()})
 }
 
-func (h *UserHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+func (h *UserWriteHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, domain.ErrUserInvalidID):
 		httperror.Unprocessable(w, r, err.Error())

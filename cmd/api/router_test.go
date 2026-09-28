@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net/http"
@@ -11,24 +12,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	contactshttp "github.com/jdgonzalez907/1channel/internal/modules/contacts/infra/http"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 	convhttp "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/http"
 	usersapp "github.com/jdgonzalez907/1channel/internal/modules/users/app"
 	usershttp "github.com/jdgonzalez907/1channel/internal/modules/users/infra/http"
+	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb/sqlc"
 )
 
 func newTestRouter() http.Handler {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	usersHandler := usershttp.NewUserHandler(&usersapp.MockCreateUser{})
-	conversationsHandler := convhttp.NewConversationHandler(
+	userWriteHandler := usershttp.NewUserWriteHandler(&usersapp.MockCreateUser{})
+	conversationWriteHandler := convhttp.NewConversationWriteHandler(
 		&app.MockSendAgentMessage{},
 		&app.MockAgentReadConversation{},
 		&app.MockResolveConversation{},
 	)
 
 	return newRouter(logger, dependencies{
-		usersHandler:         usersHandler,
-		conversationsHandler: conversationsHandler,
+		userWriteHandler:         userWriteHandler,
+		userReadHandler:          usershttp.NewUserReadHandler(sqlc.New(nil)),
+		conversationWriteHandler: conversationWriteHandler,
+		conversationReadHandler:  convhttp.NewConversationReadHandler(sqlc.New(nil)),
+		contactReadHandler:       contactshttp.NewContactReadHandler(sqlc.New(nil)),
 	})
 }
 
@@ -51,18 +57,42 @@ func TestRouter_AuthenticatedRouteRequiresBearer(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+func TestRouter_ReadRoutesRequireBearer(t *testing.T) {
+	paths := []string{
+		"/v1/conversations?status=open",
+		"/v1/conversations/" + uuid.NewV7().String(),
+		"/v1/contacts/" + uuid.NewV7().String(),
+		"/v1/users/" + uuid.NewV7().String(),
+	}
+
+	router := newTestRouter()
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, path)
+		assert.NotEqual(t, http.StatusNotFound, rec.Code, path)
+	}
+}
+
 func TestRouter_CreateUserIsPublic(t *testing.T) {
 	create := &usersapp.MockCreateUser{}
 	create.On("Execute", mock.Anything, mock.Anything).Return(nil, assert.AnError).Once()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	router := newRouter(logger, dependencies{
-		usersHandler: usershttp.NewUserHandler(create),
-		conversationsHandler: convhttp.NewConversationHandler(
+		userWriteHandler: usershttp.NewUserWriteHandler(create),
+		conversationWriteHandler: convhttp.NewConversationWriteHandler(
 			&app.MockSendAgentMessage{},
 			&app.MockAgentReadConversation{},
 			&app.MockResolveConversation{},
 		),
+		userReadHandler:         usershttp.NewUserReadHandler(sqlc.New(nil)),
+		conversationReadHandler: convhttp.NewConversationReadHandler(sqlc.New(nil)),
+		contactReadHandler:      contactshttp.NewContactReadHandler(sqlc.New(nil)),
+		userLookup:              func(context.Context, uuid.UUID) error { return nil },
 	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/users", nil)

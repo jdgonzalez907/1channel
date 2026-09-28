@@ -10,46 +10,43 @@ import (
 
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/domain"
-	"github.com/jdgonzalez907/1channel/internal/modules/users"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/httperror"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/httputil"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/middleware"
 )
 
-type ConversationHandler struct {
+type ConversationWriteHandler struct {
 	sendAgentMessage      app.SendAgentMessage
 	agentReadConversation app.AgentReadConversation
 	resolveConversation   app.ResolveConversation
 }
 
-func NewConversationHandler(
+func NewConversationWriteHandler(
 	sendAgentMessage app.SendAgentMessage,
 	agentReadConversation app.AgentReadConversation,
 	resolveConversation app.ResolveConversation,
-) *ConversationHandler {
-	return &ConversationHandler{
+) *ConversationWriteHandler {
+	return &ConversationWriteHandler{
 		sendAgentMessage:      sendAgentMessage,
 		agentReadConversation: agentReadConversation,
 		resolveConversation:   resolveConversation,
 	}
 }
 
-func (h *ConversationHandler) Register(r chi.Router) {
+func (h *ConversationWriteHandler) Register(r chi.Router) {
 	r.Post("/conversations/{id}/messages", h.handleSendAgentMessage)
 	r.Patch("/conversations/{id}/messages", h.handleMarkMessagesAsRead)
 	r.Patch("/conversations/{id}", h.handleResolveConversation)
 }
 
-func (h *ConversationHandler) handleSendAgentMessage(w http.ResponseWriter, r *http.Request) {
-	conversationID, ok := conversationIDFrom(r)
+func (h *ConversationWriteHandler) handleSendAgentMessage(w http.ResponseWriter, r *http.Request) {
+	conversationID, ok := httputil.RequirePathUUID(w, r, "id", "invalid conversation id")
 	if !ok {
-		httperror.BadRequest(w, r, "invalid conversation id")
 		return
 	}
 
-	agentID, ok := middleware.UserIDFrom(r.Context())
+	agentID, ok := middleware.RequireUserID(w, r)
 	if !ok {
-		httperror.Unauthorized(w, r, "unauthorized")
 		return
 	}
 
@@ -75,16 +72,14 @@ func (h *ConversationHandler) handleSendAgentMessage(w http.ResponseWriter, r *h
 	httputil.JSON(w, http.StatusCreated, MessageResponse{ID: messageID.String()})
 }
 
-func (h *ConversationHandler) handleMarkMessagesAsRead(w http.ResponseWriter, r *http.Request) {
-	conversationID, ok := conversationIDFrom(r)
+func (h *ConversationWriteHandler) handleMarkMessagesAsRead(w http.ResponseWriter, r *http.Request) {
+	conversationID, ok := httputil.RequirePathUUID(w, r, "id", "invalid conversation id")
 	if !ok {
-		httperror.BadRequest(w, r, "invalid conversation id")
 		return
 	}
 
-	agentID, ok := middleware.UserIDFrom(r.Context())
+	agentID, ok := middleware.RequireUserID(w, r)
 	if !ok {
-		httperror.Unauthorized(w, r, "unauthorized")
 		return
 	}
 
@@ -112,16 +107,14 @@ func (h *ConversationHandler) handleMarkMessagesAsRead(w http.ResponseWriter, r 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ConversationHandler) handleResolveConversation(w http.ResponseWriter, r *http.Request) {
-	conversationID, ok := conversationIDFrom(r)
+func (h *ConversationWriteHandler) handleResolveConversation(w http.ResponseWriter, r *http.Request) {
+	conversationID, ok := httputil.RequirePathUUID(w, r, "id", "invalid conversation id")
 	if !ok {
-		httperror.BadRequest(w, r, "invalid conversation id")
 		return
 	}
 
-	agentID, ok := middleware.UserIDFrom(r.Context())
+	agentID, ok := middleware.RequireUserID(w, r)
 	if !ok {
-		httperror.Unauthorized(w, r, "unauthorized")
 		return
 	}
 
@@ -149,10 +142,8 @@ func (h *ConversationHandler) handleResolveConversation(w http.ResponseWriter, r
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *ConversationHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
+func (h *ConversationWriteHandler) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, users.ErrUserNotFound):
-		httperror.Unauthorized(w, r, err.Error())
 	case errors.Is(err, domain.ErrConversationAgentNotOwner),
 		errors.Is(err, domain.ErrConversationContactNotOwner):
 		httperror.Forbidden(w, r, err.Error())
@@ -178,13 +169,4 @@ func (h *ConversationHandler) writeError(w http.ResponseWriter, r *http.Request,
 	default:
 		httperror.Generic(w, r, err)
 	}
-}
-
-func conversationIDFrom(r *http.Request) (uuid.UUID, bool) {
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		return uuid.Nil(), false
-	}
-
-	return id, true
 }

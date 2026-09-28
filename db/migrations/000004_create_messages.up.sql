@@ -26,7 +26,8 @@ CREATE TABLE messages (
     )
 );
 
-CREATE INDEX messages_conversation_id_idx ON messages (conversation_id);
+CREATE INDEX messages_conversation_id_idx
+    ON messages (conversation_id, sent_at DESC, id DESC);
 
 CREATE UNIQUE INDEX messages_external_id_key
     ON messages (external_id)

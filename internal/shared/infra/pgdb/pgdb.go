@@ -2,6 +2,7 @@ package pgdb
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -79,4 +80,8 @@ func (db *DB) Close() {
 	if db.Pool != nil {
 		db.Pool.Close()
 	}
+}
+
+func IsNoRows(err error) bool {
+	return errors.Is(err, pgx.ErrNoRows)
 }

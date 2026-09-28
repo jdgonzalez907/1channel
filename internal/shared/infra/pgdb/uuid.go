@@ -30,3 +30,17 @@ func FromUUIDPtr(p pgtype.UUID) *uuid.UUID {
 	u := uuid.UUID(p.Bytes)
 	return &u
 }
+
+func UUIDString(p pgtype.UUID) string {
+	return FromUUID(p).String()
+}
+
+func UUIDStringPtr(p pgtype.UUID) *string {
+	if !p.Valid {
+		return nil
+	}
+
+	value := UUIDString(p)
+
+	return &value
+}

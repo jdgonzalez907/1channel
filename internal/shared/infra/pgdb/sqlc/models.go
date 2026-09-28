@@ -9,37 +9,40 @@ import (
 )
 
 type Contact struct {
-	ID                pgtype.UUID        `json:"id"`
-	ExternalContactID string             `json:"external_contact_id"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	ID                pgtype.UUID
+	ExternalContactID string
+	CreatedAt         pgtype.Timestamptz
 }
 
 type Conversation struct {
-	ID         pgtype.UUID        `json:"id"`
-	Status     string             `json:"status"`
-	UserID     pgtype.UUID        `json:"user_id"`
-	ContactID  pgtype.UUID        `json:"contact_id"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
-	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	ID            pgtype.UUID
+	Status        string
+	UserID        pgtype.UUID
+	ContactID     pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	FinishedAt    pgtype.Timestamptz
+	LastMessageAt pgtype.Timestamptz
+	LastMessageID pgtype.UUID
+	UnreadCount   int32
 }
 
 type Message struct {
-	ID             pgtype.UUID        `json:"id"`
-	ConversationID pgtype.UUID        `json:"conversation_id"`
-	Status         string             `json:"status"`
-	Type           string             `json:"type"`
-	Text           *string            `json:"text"`
-	UserID         pgtype.UUID        `json:"user_id"`
-	ContactID      pgtype.UUID        `json:"contact_id"`
-	ExternalID     *string            `json:"external_id"`
-	SentAt         pgtype.Timestamptz `json:"sent_at"`
-	ReadAt         pgtype.Timestamptz `json:"read_at"`
-	EditedAt       pgtype.Timestamptz `json:"edited_at"`
-	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+	ID             pgtype.UUID
+	ConversationID pgtype.UUID
+	Status         string
+	Type           string
+	Text           *string
+	UserID         pgtype.UUID
+	ContactID      pgtype.UUID
+	ExternalID     *string
+	SentAt         pgtype.Timestamptz
+	ReadAt         pgtype.Timestamptz
+	EditedAt       pgtype.Timestamptz
+	DeletedAt      pgtype.Timestamptz
 }
 
 type User struct {
-	ID        pgtype.UUID        `json:"id"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        pgtype.UUID
+	CreatedAt pgtype.Timestamptz
 }

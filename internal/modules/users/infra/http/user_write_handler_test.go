@@ -16,7 +16,7 @@ import (
 	"github.com/jdgonzalez907/1channel/internal/modules/users/domain"
 )
 
-func TestUserHandler_Create(t *testing.T) {
+func TestUserWriteHandler_Create(t *testing.T) {
 	userID := uuid.NewV7()
 	now := time.Now()
 	user, err := domain.NewUser(userID, now)
@@ -68,7 +68,7 @@ func TestUserHandler_Create(t *testing.T) {
 			tt.setup(t, m)
 
 			router := chi.NewRouter()
-			NewUserHandler(m).Register(router)
+			NewUserWriteHandler(m).Register(router)
 
 			req := httptest.NewRequest(http.MethodPost, "/users", nil)
 			rec := httptest.NewRecorder()
