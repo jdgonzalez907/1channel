@@ -312,10 +312,11 @@ Formato uniforme:
 | 400    | Entrada malformada (JSON, `id` de path, posición de paginación) |
 | 401    | Sin token, token mal formado o usuario inexistente            |
 | 403    | Sin permiso sobre el recurso                                  |
-| 404    | Recurso inexistente                                           |
+| 404    | Recurso o ruta inexistente                                    |
+| 405    | Método no permitido para la ruta                              |
 | 409    | Conflicto de estado (conversación finalizada, mensaje failed, etc.) |
 | 422    | Validación (`status` inválido, texto vacío o demasiado largo) |
-| 500    | Error interno                                                 |
+| 500    | Error interno (incluye un fallo inesperado)                   |
 | 504    | Timeout del request                                           |
 
 Ejemplo de error forzado:

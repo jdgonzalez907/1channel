@@ -18,6 +18,7 @@ import (
 	convhttp "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/http"
 	usersapp "github.com/jdgonzalez907/1channel/internal/modules/users/app"
 	usershttp "github.com/jdgonzalez907/1channel/internal/modules/users/infra/http"
+	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/httperror"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb/sqlc"
 )
 
@@ -57,6 +58,26 @@ func TestRouter_Healthz(t *testing.T) {
 	newTestRouter().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestRouter_UnknownRouteReturnsProblemJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/v1/does-not-exist", nil)
+	rec := httptest.NewRecorder()
+
+	newTestRouter().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, httperror.ContentType, rec.Header().Get("Content-Type"))
+}
+
+func TestRouter_MethodNotAllowedReturnsProblemJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users", nil)
+	rec := httptest.NewRecorder()
+
+	newTestRouter().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	assert.Equal(t, httperror.ContentType, rec.Header().Get("Content-Type"))
 }
 
 func TestRouter_AuthenticatedRouteRequiresBearer(t *testing.T) {

@@ -61,6 +61,14 @@ func NotFound(w http.ResponseWriter, r *http.Request, detail string) {
 	})
 }
 
+func MethodNotAllowed(w http.ResponseWriter, r *http.Request, detail string) {
+	Write(w, r, Problem{
+		Title:  "Method Not Allowed",
+		Status: http.StatusMethodNotAllowed,
+		Detail: detail,
+	})
+}
+
 func Conflict(w http.ResponseWriter, r *http.Request, detail string) {
 	Write(w, r, Problem{
 		Title:  "Conflict",

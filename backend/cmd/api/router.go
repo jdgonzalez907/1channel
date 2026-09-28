@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
+	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/httperror"
 	sharedmiddleware "github.com/jdgonzalez907/1channel/internal/shared/infra/http/middleware"
 )
 
@@ -16,10 +17,17 @@ func newRouter(logger *slog.Logger, deps dependencies) http.Handler {
 
 	router.Use(chimiddleware.RequestID)
 	router.Use(sharedmiddleware.Logging(logger))
-	router.Use(chimiddleware.Recoverer)
+	router.Use(sharedmiddleware.Recover(logger))
 	router.Use(chimiddleware.CleanPath)
 	router.Use(chimiddleware.StripSlashes)
 	router.Use(sharedmiddleware.Timeout(5 * time.Second))
+
+	router.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		httperror.NotFound(w, r, "route not found")
+	})
+	router.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		httperror.MethodNotAllowed(w, r, "method not allowed")
+	})
 
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
