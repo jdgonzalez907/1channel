@@ -144,9 +144,19 @@ docker compose ps          # Status and healthcheck
 docker compose logs -f postgres
 make migrate-up            # Apply migrations on demand
 make reset                 # Recreate DB from scratch
+make seed                  # Load dev test data (SOLO dev; DESTRUCTIVE)
 ```
 
 If `docker` asks for permissions: `make DOCKER="sudo docker" up` (or add your user to the `docker` group). Note: with passworded sudo, `make` may not work non-interactively; the `migrate` CLI against `localhost:5432` is the fallback (see below).
+
+### Dev Seed Data
+
+`make seed` runs `db/seed/dev_seed.sql` inside the `postgres` container. It is a plain
+SQL script (not a migration and never for production) that **truncates** `users`,
+`contacts`, `conversations` and `messages`, then reloads realistic test data: 3 agents,
+50 contacts, 90 conversations (30 open / 60 finished) and 3000 messages. It aborts if the
+target database name does not contain `dev`. Requires the database to be migrated and the
+`postgres` service running. Re-run it freely; it always rebuilds from scratch.
 
 ### Essential Commands (host or container)
 ```bash
