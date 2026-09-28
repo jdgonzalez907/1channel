@@ -75,7 +75,7 @@ SELECT
 FROM conversations c
 JOIN contacts ct ON ct.id = c.contact_id
 JOIN messages lm ON lm.id = c.last_message_id
-WHERE (c.status = 'pending' OR c.user_id = sqlc.arg('agent_id'))
+WHERE (c.user_id IS NULL OR c.user_id = sqlc.arg('agent_id'))
   AND c.status = ANY(sqlc.arg('statuses')::text[])
   AND (sqlc.narg('contact_id')::uuid IS NULL OR c.contact_id = sqlc.narg('contact_id'))
   AND (
