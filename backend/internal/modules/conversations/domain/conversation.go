@@ -290,60 +290,6 @@ func (c *Conversation) ResolveConversation(agentID uuid.UUID, at time.Time) erro
 	return nil
 }
 
-func (c *Conversation) AgentEditMessage(agentID uuid.UUID, msgID uuid.UUID, newText string, at time.Time) error {
-	if err := c.ensureNotFinished(); err != nil {
-		return err
-	}
-
-	if c.agentID == nil || *c.agentID != agentID {
-		return ErrConversationAgentNotOwner
-	}
-
-	msg, exists := c.found[msgID]
-	if !exists {
-		return ErrMessageNotFound
-	}
-
-	if msg.AgentID() == nil {
-		return ErrConversationAgentNotOwner
-	}
-
-	if err := msg.EditText(newText, at); err != nil {
-		return err
-	}
-
-	c.dirty[msgID] = msg
-	c.registerActivity(at)
-	return nil
-}
-
-func (c *Conversation) AgentDeleteMessage(agentID uuid.UUID, msgID uuid.UUID, at time.Time) error {
-	if err := c.ensureNotFinished(); err != nil {
-		return err
-	}
-
-	if c.agentID == nil || *c.agentID != agentID {
-		return ErrConversationAgentNotOwner
-	}
-
-	msg, exists := c.found[msgID]
-	if !exists {
-		return ErrMessageNotFound
-	}
-
-	if msg.AgentID() == nil {
-		return ErrConversationAgentNotOwner
-	}
-
-	if err := msg.Delete(at); err != nil {
-		return err
-	}
-
-	c.dirty[msgID] = msg
-	c.registerActivity(at)
-	return nil
-}
-
 func (c *Conversation) MarkAgentMessageFailed(agentID uuid.UUID, msgID uuid.UUID, at time.Time) error {
 	if c.agentID == nil || *c.agentID != agentID {
 		return ErrConversationAgentNotOwner

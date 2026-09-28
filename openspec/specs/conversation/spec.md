@@ -264,112 +264,6 @@ El sistema SHALL permitir marcar un mensaje como leído, cambiando su status a r
 - **WHEN** se marca un mensaje como leído con un timestamp
 - **THEN** el mensaje queda con status read y readAt asignado
 
-### Requirement: Editar mensaje de texto
-El sistema SHALL permitir editar el texto de un mensaje existente de tipo texto. Solo el dueño del mensaje puede editarlo. Si llega una edición con timestamp anterior o igual a la última edición aplicada, el sistema SHALL conservar la edición más reciente.
-
-#### Scenario: Agente edita mensaje exitosamente
-- **WHEN** un agente edita un mensaje de texto que le pertenece en una conversación activa
-- **THEN** el texto del mensaje se actualiza y editedAt se asigna
-
-#### Scenario: Contacto edita mensaje exitosamente
-- **WHEN** un contacto edita un mensaje de texto que le pertenece por externalID
-- **THEN** el texto del mensaje se actualiza y editedAt se asigna
-
-#### Scenario: Descartar edición anterior a la última edición
-- **WHEN** se recibe una edición con timestamp anterior o igual a la última edición aplicada
-- **THEN** el mensaje conserva el texto y editedAt de la edición más reciente, sin retornar error
-
-#### Scenario: Fallar si mensaje no es de texto
-- **WHEN** se intenta editar un mensaje que no tiene texto
-- **THEN** el sistema retorna ErrMessageNotText
-
-#### Scenario: Fallar si el nuevo texto está vacío
-- **WHEN** se intenta editar un mensaje con texto vacío
-- **THEN** el sistema retorna ErrMessageEmptyText
-
-#### Scenario: Fallar si el nuevo texto excede el máximo
-- **WHEN** se intenta editar un mensaje con texto de más de 1000 caracteres
-- **THEN** el sistema retorna ErrMessageTextTooLong
-
-#### Scenario: Fallar si mensaje está eliminado y timestamp es posterior
-- **WHEN** se intenta editar un mensaje eliminado con timestamp posterior a deletedAt
-- **THEN** el sistema retorna ErrMessageAlreadyDeleted
-
-#### Scenario: Permitir edit con timestamp anterior a eliminación
-- **WHEN** se intenta editar un mensaje eliminado con timestamp anterior a deletedAt
-- **THEN** la edición se aplica como traza del estado anterior
-
-#### Scenario: Fallar si mensaje está en estado failed
-- **WHEN** se intenta editar un mensaje en estado failed
-- **THEN** el sistema retorna ErrMessageFailed
-
-#### Scenario: Fallar si el mensaje no existe
-- **WHEN** un agente intenta editar un mensaje con un id que no existe en la conversación
-- **THEN** el sistema retorna ErrMessageNotFound
-
-#### Scenario: Fallar si el externalID no existe
-- **WHEN** un contacto intenta editar un mensaje con un externalID que no existe en la conversación
-- **THEN** el sistema retorna ErrMessageNotFound
-
-#### Scenario: Fallar si el mensaje no pertenece al agente
-- **WHEN** un agente intenta editar un mensaje enviado por el contacto
-- **THEN** el sistema retorna ErrConversationAgentNotOwner
-
-#### Scenario: Fallar si el mensaje no pertenece al contacto
-- **WHEN** un contacto intenta editar por externalID un mensaje enviado por el agente
-- **THEN** el sistema retorna ErrConversationContactNotOwner
-
-#### Scenario: Fallar si agente intenta editar en conversación finalizada
-- **WHEN** un agente intenta editar un mensaje en una conversación expired o resolved
-- **THEN** el sistema retorna ErrConversationFinished
-
-#### Scenario: Contacto puede editar en conversación finalizada
-- **WHEN** un contacto edita un mensaje en una conversación expired o resolved
-- **THEN** la edición se aplica normalmente
-
-### Requirement: Eliminar mensaje
-El sistema SHALL permitir eliminar un mensaje existente (soft delete). Solo el dueño del mensaje puede eliminarlo.
-
-#### Scenario: Agente elimina mensaje exitosamente
-- **WHEN** un agente elimina un mensaje que le pertenece en una conversación activa
-- **THEN** el mensaje queda con status deleted y deletedAt asignado
-
-#### Scenario: Contacto elimina mensaje exitosamente
-- **WHEN** un contacto elimina un mensaje que le pertenece por externalID
-- **THEN** el mensaje queda con status deleted y deletedAt asignado
-
-#### Scenario: Fallar si mensaje ya está eliminado
-- **WHEN** se intenta eliminar un mensaje que ya tiene deletedAt, sin importar el timestamp
-- **THEN** el sistema retorna ErrMessageAlreadyDeleted
-
-#### Scenario: Fallar si mensaje está en estado failed
-- **WHEN** se intenta eliminar un mensaje en estado failed
-- **THEN** el sistema retorna ErrMessageFailed
-
-#### Scenario: Fallar si el mensaje no existe
-- **WHEN** un agente intenta eliminar un mensaje con un id que no existe en la conversación
-- **THEN** el sistema retorna ErrMessageNotFound
-
-#### Scenario: Fallar si el externalID no existe
-- **WHEN** un contacto intenta eliminar un mensaje con un externalID que no existe en la conversación
-- **THEN** el sistema retorna ErrMessageNotFound
-
-#### Scenario: Fallar si el mensaje no pertenece al agente
-- **WHEN** un agente intenta eliminar un mensaje enviado por el contacto
-- **THEN** el sistema retorna ErrConversationAgentNotOwner
-
-#### Scenario: Fallar si el mensaje no pertenece al contacto
-- **WHEN** un contacto intenta eliminar por externalID un mensaje enviado por el agente
-- **THEN** el sistema retorna ErrConversationContactNotOwner
-
-#### Scenario: Fallar si agente intenta eliminar en conversación finalizada
-- **WHEN** un agente intenta eliminar un mensaje en una conversación expired o resolved
-- **THEN** el sistema retorna ErrConversationFinished
-
-#### Scenario: Contacto puede eliminar en conversación finalizada
-- **WHEN** un contacto elimina un mensaje en una conversación expired o resolved
-- **THEN** la eliminación se aplica normalmente
-
 ### Requirement: Marcar mensaje como fallido
 El sistema SHALL permitir marcar como fallido un mensaje enviado por el agente cuando la infraestructura no pudo entregarlo. El estado failed es terminal y bloquea todas las modificaciones.
 
@@ -477,7 +371,7 @@ El sistema SHALL adjuntar un mensaje entrante del contacto a la conversación ac
 
 ### Requirement: Caso de uso: editar mensaje de contacto
 
-El sistema SHALL aplicar la edición de un mensaje enviada por el contacto, localizándolo por su identificador externo dentro de la conversación. Las ediciones con timestamp anterior o igual a la última edición aplicada SHALL descartarse sin error. El sistema no SHALL rechazar la edición por el estado finalizado de la conversación.
+El sistema SHALL aplicar la edición de un mensaje enviada por el contacto, localizándolo por su identificador externo dentro de la conversación. Un agente no SHALL poder editar mensajes. Las ediciones con timestamp anterior o igual a la última edición aplicada SHALL descartarse sin error. El sistema no SHALL rechazar la edición por el estado finalizado de la conversación. El sistema SHALL validar el contenido: solo mensajes de tipo texto, texto no vacío, como máximo 1000 caracteres, y mensajes no fallidos.
 
 #### Scenario: Edición aplicada
 
@@ -504,9 +398,39 @@ El sistema SHALL aplicar la edición de un mensaje enviada por el contacto, loca
 - **WHEN** el contacto edita un mensaje en una conversación finalizada
 - **THEN** la edición se aplica igualmente
 
+#### Scenario: Editar un mensaje sin texto
+
+- **WHEN** el contacto edita un mensaje que no tiene texto
+- **THEN** el sistema retorna ErrMessageNotText
+
+#### Scenario: Editar con texto vacío
+
+- **WHEN** el contacto edita un mensaje con texto vacío
+- **THEN** el sistema retorna ErrMessageEmptyText
+
+#### Scenario: Editar con texto que excede el máximo
+
+- **WHEN** el contacto edita un mensaje con texto de más de 1000 caracteres
+- **THEN** el sistema retorna ErrMessageTextTooLong
+
+#### Scenario: Editar un mensaje eliminado con timestamp posterior
+
+- **WHEN** el contacto edita un mensaje eliminado con timestamp posterior a deletedAt
+- **THEN** el sistema retorna ErrMessageAlreadyDeleted
+
+#### Scenario: Editar un mensaje eliminado con timestamp anterior
+
+- **WHEN** el contacto edita un mensaje eliminado con timestamp anterior a deletedAt
+- **THEN** la edición se aplica como traza del estado anterior
+
+#### Scenario: Editar un mensaje fallido
+
+- **WHEN** el contacto edita un mensaje en estado failed
+- **THEN** el sistema retorna ErrMessageFailed
+
 ### Requirement: Caso de uso: eliminar mensaje de contacto
 
-El sistema SHALL aplicar la eliminación (soft delete) de un mensaje enviada por el contacto, localizándolo por su identificador externo. Un mensaje ya eliminado SHALL tratarse como idempotente (sin error). El sistema no SHALL rechazar la eliminación por el estado finalizado de la conversación.
+El sistema SHALL aplicar la eliminación (soft delete) de un mensaje enviada por el contacto, localizándolo por su identificador externo. Un agente no SHALL poder eliminar mensajes. Un mensaje ya eliminado SHALL tratarse como idempotente (sin error). El sistema no SHALL rechazar la eliminación por el estado finalizado de la conversación. El sistema SHALL rechazar eliminar un mensaje en estado failed.
 
 #### Scenario: Eliminación aplicada
 
@@ -532,6 +456,11 @@ El sistema SHALL aplicar la eliminación (soft delete) de un mensaje enviada por
 
 - **WHEN** el contacto elimina un mensaje en una conversación finalizada
 - **THEN** la eliminación se aplica igualmente
+
+#### Scenario: Eliminar un mensaje fallido
+
+- **WHEN** el contacto elimina un mensaje en estado failed
+- **THEN** el sistema retorna ErrMessageFailed
 
 ### Requirement: Caso de uso: marcar como leído un mensaje del agente por el contacto
 
