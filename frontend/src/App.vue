@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { asApiError, getUser, type ApiError } from '@/api/client'
 import type { ConversationListItem } from '@/api/types'
+import ContactPersonalInformation from '@/components/ContactPersonalInformation.vue'
 import ConversationDetail from '@/components/ConversationDetail.vue'
 import ConversationList from '@/components/ConversationList.vue'
 import WebhookSimulator from '@/components/WebhookSimulator.vue'
@@ -57,6 +58,11 @@ function onConversationChanged() {
   listReloadKey.value++
 }
 
+function onPersonalInformationSaved() {
+  listReloadKey.value++
+  detailReloadKey.value++
+}
+
 function onWebhookSent(externalContactId: string) {
   simulatorOpen.value = false
   listReloadKey.value++
@@ -100,6 +106,13 @@ function onWebhookSent(externalContactId: string) {
           :conversation-id="selected ? selected.id : null"
           :reload-key="detailReloadKey"
           @changed="onConversationChanged"
+        />
+      </section>
+      <section class="pane pane-person">
+        <ContactPersonalInformation
+          :agent-id="agentId"
+          :contact-id="selected ? selected.contact.id : null"
+          @saved="onPersonalInformationSaved"
         />
       </section>
     </main>
@@ -154,14 +167,16 @@ function onWebhookSent(externalContactId: string) {
 }
 
 .pane-list,
-.pane-detail {
+.pane-detail,
+.pane-person {
   display: flex;
   min-height: 0;
   overflow: hidden;
 }
 
 .pane-list > *,
-.pane-detail > * {
+.pane-detail > *,
+.pane-person > * {
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -175,6 +190,11 @@ function onWebhookSent(externalContactId: string) {
 .pane-detail {
   flex: 1;
   min-width: 0;
+}
+
+.pane-person {
+  flex: 0 0 20rem;
+  border-left: 1px solid #d1d5db;
 }
 
 @media (max-width: 720px) {

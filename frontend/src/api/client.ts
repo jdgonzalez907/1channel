@@ -1,9 +1,12 @@
 import type {
+  Contact,
   ConversationDetail,
   ConversationListResponse,
   ConversationTab,
   PaginationPosition,
+  PersonalInformation,
   ProblemDetails,
+  SavePersonalInformationInput,
   User,
   WebhookPayload,
 } from './types'
@@ -111,6 +114,37 @@ export function getConversation(
   return request<ConversationDetail>(
     `/v1/conversations/${encodeURIComponent(conversationId)}${query}`,
     { headers: authHeaders(agentId) },
+  )
+}
+
+export function getContact(agentId: string, contactId: string): Promise<Contact> {
+  return request<Contact>(`/v1/contacts/${encodeURIComponent(contactId)}`, {
+    headers: authHeaders(agentId),
+  })
+}
+
+export function getPersonalInformationByDocument(
+  agentId: string,
+  identificationNumber: string,
+): Promise<PersonalInformation> {
+  return request<PersonalInformation>(
+    `/v1/personal-information/${encodeURIComponent(identificationNumber)}`,
+    { headers: authHeaders(agentId) },
+  )
+}
+
+export function saveContactPersonalInformation(
+  agentId: string,
+  contactId: string,
+  input: SavePersonalInformationInput,
+): Promise<PersonalInformation> {
+  return request<PersonalInformation>(
+    `/v1/contacts/${encodeURIComponent(contactId)}/personal-information`,
+    {
+      method: 'PUT',
+      headers: jsonHeaders(agentId),
+      body: JSON.stringify(input),
+    },
   )
 }
 

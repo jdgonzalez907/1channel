@@ -11,8 +11,8 @@ type MockContactsAPI struct {
 	mock.Mock
 }
 
-func (m *MockContactsAPI) GetOrCreateContactIDByExternalID(ctx context.Context, externalContactID string) (uuid.UUID, error) {
-	args := m.Called(ctx, externalContactID)
+func (m *MockContactsAPI) GetOrCreateContactIDByExternalID(ctx context.Context, externalContactID string, displayName *string) (uuid.UUID, error) {
+	args := m.Called(ctx, externalContactID, displayName)
 
 	return args.Get(0).(uuid.UUID), args.Error(1)
 }

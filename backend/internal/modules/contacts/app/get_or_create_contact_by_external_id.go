@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 	"uuid"
 
@@ -14,6 +15,7 @@ var ErrGettingOrCreatingContactByExternalID = errors.New("getting or creating co
 type GetOrCreateContactByExternalIDInput struct {
 	ContactID         uuid.UUID
 	ExternalContactID string
+	DisplayName       *string
 	CreatedAt         time.Time
 }
 
@@ -36,13 +38,29 @@ func (uc *getOrCreateContactByExternalID) Execute(ctx context.Context, input Get
 	}
 
 	if contact != nil {
-		return contact, nil
+		return uc.updateDisplayName(ctx, contact, input.DisplayName)
 	}
 
 	contact, err = domain.NewContact(input.ContactID, input.ExternalContactID, input.CreatedAt)
 	if err != nil {
 		return nil, uc.joinErr(err)
 	}
+
+	contact.AssignDisplayName(input.DisplayName)
+
+	if err := uc.contactRepository.Save(ctx, contact); err != nil {
+		return nil, uc.joinErr(err)
+	}
+
+	return contact, nil
+}
+
+func (uc *getOrCreateContactByExternalID) updateDisplayName(ctx context.Context, contact *domain.Contact, displayName *string) (*domain.Contact, error) {
+	if displayName == nil || strings.TrimSpace(*displayName) == "" {
+		return contact, nil
+	}
+
+	contact.AssignDisplayName(displayName)
 
 	if err := uc.contactRepository.Save(ctx, contact); err != nil {
 		return nil, uc.joinErr(err)

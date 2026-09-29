@@ -17,6 +17,7 @@ type ReceiveContactMessageInput struct {
 	MessageID         uuid.UUID
 	ExternalMessageID *string
 	ExternalContactID string
+	DisplayName       *string
 	Text              string
 	ReceivedAt        time.Time
 }
@@ -35,7 +36,7 @@ func NewReceiveContactMessage(conversationRepository domain.ConversationReposito
 }
 
 func (uc *receiveContactMessage) Execute(ctx context.Context, input ReceiveContactMessageInput) error {
-	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID)
+	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID, input.DisplayName)
 	if err != nil {
 		return uc.joinErr(err)
 	}

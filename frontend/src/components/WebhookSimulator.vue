@@ -16,6 +16,7 @@ const emit = defineEmits<{
 const event = ref<WebhookEvent>('message.received')
 const contactId = ref('')
 const messageId = ref('')
+const displayName = ref('')
 const text = ref('')
 const error = ref<ApiError | null>(null)
 const sending = ref(false)
@@ -24,6 +25,8 @@ const needsText = computed(
   () => event.value === 'message.received' || event.value === 'message.edited',
 )
 
+const setsDisplayName = computed(() => event.value === 'message.received')
+
 watch(
   () => props.open,
   (isOpen) => {
@@ -31,6 +34,7 @@ watch(
     event.value = 'message.received'
     contactId.value = props.contactExternalId
     messageId.value = ''
+    displayName.value = ''
     text.value = ''
     error.value = null
   },
@@ -44,6 +48,9 @@ async function submit() {
       event: event.value,
       external_contact_id: contactId.value,
       external_message_id: messageId.value,
+      ...(setsDisplayName.value && displayName.value.trim() !== ''
+        ? { display_name: displayName.value.trim() }
+        : {}),
       ...(needsText.value ? { text: text.value } : {}),
     })
     emit('sent', contactId.value)
@@ -73,6 +80,11 @@ async function submit() {
       <label>
         external_contact_id
         <input v-model="contactId" type="text" />
+      </label>
+
+      <label v-if="setsDisplayName">
+        display_name (opcional)
+        <input v-model="displayName" type="text" />
       </label>
 
       <label>

@@ -13,6 +13,80 @@ import (
 	"github.com/jdgonzalez907/1channel/internal/modules/contacts/domain"
 )
 
+func TestGetOrCreateContactByExternalID_DisplayName(t *testing.T) {
+	externalID := "5491112345678"
+	now := time.Now()
+	displayName := "Juan"
+
+	t.Run("new contact stores display name", func(t *testing.T) {
+		// Arrange
+		repo := &domain.MockContactRepository{}
+		repo.On("FindByExternalContactID", mock.Anything, externalID).Return(nil, nil).Once()
+		repo.On("Save", mock.Anything, mock.MatchedBy(func(c *domain.Contact) bool {
+			return c.DisplayName() != nil && *c.DisplayName() == displayName
+		})).Return(nil).Once()
+		uc := NewGetOrCreateContactByExternalID(repo)
+
+		// Act
+		got, err := uc.Execute(context.Background(), GetOrCreateContactByExternalIDInput{
+			ContactID:         uuid.NewV7(),
+			ExternalContactID: externalID,
+			DisplayName:       &displayName,
+			CreatedAt:         now,
+		})
+
+		// Assert
+		assert.NoError(t, err)
+		assert.NotNil(t, got)
+		assert.Equal(t, &displayName, got.DisplayName())
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("existing contact without display name is not saved", func(t *testing.T) {
+		// Arrange
+		repo := &domain.MockContactRepository{}
+		existing, err := domain.NewContact(uuid.NewV7(), externalID, now)
+		assert.NoError(t, err)
+		repo.On("FindByExternalContactID", mock.Anything, externalID).Return(existing, nil).Once()
+		uc := NewGetOrCreateContactByExternalID(repo)
+
+		// Act
+		got, err := uc.Execute(context.Background(), GetOrCreateContactByExternalIDInput{
+			ContactID:         uuid.NewV7(),
+			ExternalContactID: externalID,
+			CreatedAt:         now,
+		})
+
+		// Assert
+		assert.NoError(t, err)
+		assert.Same(t, existing, got)
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("existing contact updates display name", func(t *testing.T) {
+		// Arrange
+		repo := &domain.MockContactRepository{}
+		existing, err := domain.NewContact(uuid.NewV7(), externalID, now)
+		assert.NoError(t, err)
+		repo.On("FindByExternalContactID", mock.Anything, externalID).Return(existing, nil).Once()
+		repo.On("Save", mock.Anything, existing).Return(nil).Once()
+		uc := NewGetOrCreateContactByExternalID(repo)
+
+		// Act
+		got, err := uc.Execute(context.Background(), GetOrCreateContactByExternalIDInput{
+			ContactID:         uuid.NewV7(),
+			ExternalContactID: externalID,
+			DisplayName:       &displayName,
+			CreatedAt:         now,
+		})
+
+		// Assert
+		assert.NoError(t, err)
+		assert.Equal(t, &displayName, got.DisplayName())
+		repo.AssertExpectations(t)
+	})
+}
+
 func TestGetOrCreateContactByExternalID_Execute(t *testing.T) {
 	contactID := uuid.NewV7()
 	externalID := "5491112345678"

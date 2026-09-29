@@ -9,7 +9,7 @@ import (
 )
 
 type ContactsAPI interface {
-	GetOrCreateContactIDByExternalID(ctx context.Context, externalContactID string) (uuid.UUID, error)
+	GetOrCreateContactIDByExternalID(ctx context.Context, externalContactID string, displayName *string) (uuid.UUID, error)
 	FindExternalContactIDByContactID(ctx context.Context, contactID uuid.UUID) (string, error)
 }
 
@@ -28,10 +28,11 @@ func NewContactsAPI(
 	}
 }
 
-func (a *contactsAPI) GetOrCreateContactIDByExternalID(ctx context.Context, externalContactID string) (uuid.UUID, error) {
+func (a *contactsAPI) GetOrCreateContactIDByExternalID(ctx context.Context, externalContactID string, displayName *string) (uuid.UUID, error) {
 	contact, err := a.getOrCreateContactByExternalID.Execute(ctx, app.GetOrCreateContactByExternalIDInput{
 		ContactID:         uuid.NewV7(),
 		ExternalContactID: externalContactID,
+		DisplayName:       displayName,
 		CreatedAt:         time.Now().UTC(),
 	})
 	if err != nil {

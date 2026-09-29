@@ -1,12 +1,13 @@
 -- ============================================================================
 -- 1Channel - Seed de datos de prueba
 --
--- SOLO DESARROLLO. DESTRUCTIVO: trunca users/contacts/conversations/messages.
--- NUNCA es una migracion y NUNCA debe correr en produccion.
+-- SOLO DESARROLLO. DESTRUCTIVO: trunca users/contacts/conversations/messages/
+-- personal_information. NUNCA es una migracion y NUNCA debe correr en produccion.
 --
 -- Uso:  make seed
 --
--- Genera: 3 agentes, 50 contactos, 90 conversaciones y 3000 mensajes
+-- Genera: 3 agentes, 15 personas (5 compartidas por 2 contactos), 50 contactos
+-- (con y sin display_name), 90 conversaciones y 3000 mensajes
 -- (5..50 por conversacion), con todos los invariantes de dominio respetados.
 -- IDs y external_ids en UUID v7 (uuidv7(), nativo de Postgres 18).
 -- ============================================================================
@@ -21,7 +22,7 @@ BEGIN
     END IF;
 END $$;
 
-TRUNCATE users, contacts, conversations, messages RESTART IDENTITY CASCADE;
+TRUNCATE users, contacts, conversations, messages, personal_information RESTART IDENTITY CASCADE;
 
 -- 1. Agentes, contactos y catalogo de frases --------------------------------
 CREATE TEMP TABLE seed_user AS
@@ -33,15 +34,46 @@ FROM generate_series(1, 3) g;
 INSERT INTO users (id, created_at)
 SELECT id, created_at FROM seed_user;
 
+-- Personas: 15 en total. Las 5 primeras las comparten pares de contactos
+-- (1..10); las 10 restantes pertenecen a un contacto cada una (11..20).
+CREATE TEMP TABLE seed_pi AS
+SELECT p AS pi_no,
+       uuidv7() AS id,
+       lpad((10000000 + p)::text, 8, '0') AS identification_number,
+       (ARRAY['Juan','Maria','Carlos','Lucia','Pedro','Ana','Diego','Sofia','Jorge','Valentina','Andres','Camila','Mateo','Isabel','Ricardo'])[p] AS first_name,
+       (ARRAY['Perez','Gomez','Lopez','Martinez','Rodriguez','Fernandez','Garcia','Diaz','Torres','Ramirez','Vargas','Castro','Rojas','Silva','Mora'])[p] AS last_name,
+       CASE WHEN p % 5 = 0 THEN NULL ELSE '555-' || lpad((1000 + p)::text, 4, '0') END AS phone_number,
+       CASE WHEN p % 4 = 0 THEN NULL ELSE 'persona' || p || '@example.com' END AS email,
+       CASE WHEN p % 6 = 0 THEN NULL ELSE 'Calle ' || p || ' #' || (10 + p) || '-' || (20 + p) END AS address
+FROM generate_series(1, 15) p;
+
+INSERT INTO personal_information (id, identification_number, first_name, last_name,
+                                  phone_number, email, address, created_at, updated_at)
+SELECT id, identification_number, first_name, last_name, phone_number, email, address,
+       now() - interval '180 days' + (pi_no * interval '1 hour'),
+       now() - interval '30 days' + (pi_no * interval '1 hour')
+FROM seed_pi;
+
+-- Contactos 1..20 tienen persona (1..10 compartida en pares, 11..20 propia);
+-- 21..44 solo display_name; 45..50 (la minoria) sin display_name ni persona.
 CREATE TEMP TABLE seed_contact AS
 SELECT g                                          AS contact_no,
        uuidv7()                                   AS id,
        uuidv7()::text                             AS external_contact_id,
+       CASE WHEN g <= 20 OR g >= 45 THEN NULL
+            ELSE (ARRAY['Cliente','Usuario','Contacto'])[1 + (g % 3)] || ' ' || lpad((1000 + g)::text, 4, '0')
+       END                                        AS display_name,
+       CASE WHEN g <= 10 THEN (g + 1) / 2
+            WHEN g <= 20 THEN 5 + (g - 10)
+            ELSE NULL
+       END                                        AS pi_no,
        now() - interval '200 days' + (g * interval '1 hour') AS created_at
 FROM generate_series(1, 50) g;
 
-INSERT INTO contacts (id, external_contact_id, created_at)
-SELECT id, external_contact_id, created_at FROM seed_contact;
+INSERT INTO contacts (id, external_contact_id, display_name, personal_information_id, created_at)
+SELECT sc.id, sc.external_contact_id, sc.display_name, pi.id, sc.created_at
+FROM seed_contact sc
+LEFT JOIN seed_pi pi ON pi.pi_no = sc.pi_no;
 
 CREATE TEMP TABLE seed_phrase (topic text, role text, idx int, body text);
 
@@ -333,6 +365,18 @@ WHERE m.owner = 'contact'
       SELECT 1 FROM seed_conv c WHERE c.conv_no = m.conv_no AND c.agent_no IS NOT NULL
   );
 
+-- read_at del agente: cada mensaje del agente se lee en el primer mensaje del
+-- contacto posterior (el contacto lo vio).
+UPDATE seed_msg m
+SET read_at = (
+    SELECT MIN(a.sent_at)
+    FROM seed_msg a
+    WHERE a.conv_no = m.conv_no AND a.m_idx > m.m_idx AND a.owner = 'contact'
+)
+WHERE m.owner = 'agent'
+  AND NOT m.flag_failed
+  AND NOT m.flag_deleted;
+
 UPDATE seed_msg
 SET status = CASE
     WHEN flag_failed  THEN 'failed'
@@ -416,6 +460,19 @@ BEGIN
     SELECT count(*) INTO v_count FROM contacts;
     IF v_count <> 50 THEN RAISE EXCEPTION 'contactos = % (esperado 50)', v_count; END IF;
 
+    SELECT count(*) INTO v_count FROM personal_information;
+    IF v_count <> 15 THEN RAISE EXCEPTION 'personal information = % (esperado 15)', v_count; END IF;
+
+    SELECT count(*) INTO v_count FROM contacts WHERE personal_information_id IS NOT NULL;
+    IF v_count <> 20 THEN RAISE EXCEPTION 'contactos con persona = % (esperado 20)', v_count; END IF;
+
+    SELECT count(*) INTO v_bad FROM (
+        SELECT personal_information_id FROM contacts
+        WHERE personal_information_id IS NOT NULL
+        GROUP BY personal_information_id HAVING count(*) > 1
+    ) x;
+    IF v_bad <> 5 THEN RAISE EXCEPTION 'personas compartidas = % (esperado 5)', v_bad; END IF;
+
     SELECT count(*) INTO v_count FROM conversations;
     IF v_count <> 90 THEN RAISE EXCEPTION 'conversaciones = % (esperado 90)', v_count; END IF;
 
@@ -453,8 +510,8 @@ BEGIN
     WHERE c.finished_at IS NOT NULL AND m.sent_at >= c.finished_at;
     IF v_bad > 0 THEN RAISE EXCEPTION 'mensajes no anteriores a finished_at: %', v_bad; END IF;
 
-    SELECT count(*) INTO v_bad FROM messages WHERE read_at IS NOT NULL AND contact_id IS NULL;
-    IF v_bad > 0 THEN RAISE EXCEPTION 'read_at en mensajes de agente: %', v_bad; END IF;
+    SELECT count(*) INTO v_bad FROM messages WHERE read_at IS NOT NULL AND read_at < sent_at;
+    IF v_bad > 0 THEN RAISE EXCEPTION 'read_at anterior a sent_at: %', v_bad; END IF;
 
     SELECT count(*) INTO v_bad
     FROM messages WHERE status = 'failed' AND (user_id IS NULL OR external_id IS NOT NULL);

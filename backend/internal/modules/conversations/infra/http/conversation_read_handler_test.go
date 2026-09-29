@@ -90,6 +90,92 @@ func TestConversationListItemFromRow(t *testing.T) {
 	assert.Nil(t, conversationListItemFromRow(row).LastMessage.Text)
 }
 
+func TestConversationContactLabelAndPersonalInformation(t *testing.T) {
+	firstName := "Juan"
+	lastName := "Perez"
+	displayName := "Cliente 1001"
+	identificationNumber := "12345678"
+	phoneNumber := "5551234"
+	email := "juan@example.com"
+	address := "Calle 1 #2-3"
+	externalID := "ext-1"
+	now := time.Now().UTC()
+
+	t.Run("list item uses the personal information full name", func(t *testing.T) {
+		// Arrange
+		row := sqlc.ListConversationsForAgentRow{
+			ExternalContactID: externalID,
+			FirstName:         &firstName,
+			LastName:          &lastName,
+			DisplayName:       &displayName,
+		}
+
+		// Act
+		got := conversationListItemFromRow(row)
+
+		// Assert
+		assert.Equal(t, "Juan Perez", got.Contact.Label)
+	})
+
+	t.Run("list item falls back to the display name", func(t *testing.T) {
+		// Arrange
+		row := sqlc.ListConversationsForAgentRow{
+			ExternalContactID: externalID,
+			DisplayName:       &displayName,
+		}
+
+		// Act
+		got := conversationListItemFromRow(row)
+
+		// Assert
+		assert.Equal(t, displayName, got.Contact.Label)
+	})
+
+	t.Run("list item falls back to the external contact id", func(t *testing.T) {
+		// Arrange
+		row := sqlc.ListConversationsForAgentRow{ExternalContactID: externalID}
+
+		// Act
+		got := conversationListItemFromRow(row)
+
+		// Assert
+		assert.Equal(t, externalID, got.Contact.Label)
+	})
+
+	t.Run("detail maps the nested personal information", func(t *testing.T) {
+		// Arrange
+		personalInformationID := uuid.NewV7()
+		row := sqlc.FindConversationWithContactByIDRow{
+			PiID:                 pgdb.UUID(personalInformationID),
+			IdentificationNumber: identificationNumber,
+			FirstName:            &firstName,
+			LastName:             &lastName,
+			PhoneNumber:          &phoneNumber,
+			Email:                &email,
+			Address:              &address,
+			PiCreatedAt:          pgdb.Timestamp(now),
+			PiUpdatedAt:          pgdb.Timestamp(now),
+		}
+
+		// Act
+		got := personalInformationFromConversationRow(row)
+
+		// Assert
+		require.NotNil(t, got)
+		assert.Equal(t, personalInformationID.String(), got.ID)
+		assert.Equal(t, identificationNumber, got.IdentificationNumber)
+		assert.Equal(t, &firstName, got.FirstName)
+	})
+
+	t.Run("detail without personal information is nil", func(t *testing.T) {
+		// Act
+		got := personalInformationFromConversationRow(sqlc.FindConversationWithContactByIDRow{})
+
+		// Assert
+		assert.Nil(t, got)
+	})
+}
+
 func TestConversationMessageFromRow(t *testing.T) {
 	now := time.Now().UTC()
 	messageID := uuid.NewV7()

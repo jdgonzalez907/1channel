@@ -48,12 +48,20 @@ func (r *postgresContactRepository) FindByExternalContactID(ctx context.Context,
 
 func (r *postgresContactRepository) Save(ctx context.Context, contact *domain.Contact) error {
 	return r.db.Queries.UpsertContact(ctx, sqlc.UpsertContactParams{
-		ID:                pgdb.UUID(contact.ID()),
-		ExternalContactID: contact.ExternalContactID(),
-		CreatedAt:         pgdb.Timestamp(contact.CreatedAt()),
+		ID:                    pgdb.UUID(contact.ID()),
+		ExternalContactID:     contact.ExternalContactID(),
+		DisplayName:           contact.DisplayName(),
+		PersonalInformationID: pgdb.UUIDPtr(contact.PersonalInformationID()),
+		CreatedAt:             pgdb.Timestamp(contact.CreatedAt()),
 	})
 }
 
 func toContact(row sqlc.Contact) *domain.Contact {
-	return domain.RehydrateContact(pgdb.FromUUID(row.ID), row.ExternalContactID, pgdb.FromTimestamp(row.CreatedAt))
+	return domain.RehydrateContact(
+		pgdb.FromUUID(row.ID),
+		row.ExternalContactID,
+		row.DisplayName,
+		pgdb.FromUUIDPtr(row.PersonalInformationID),
+		pgdb.FromTimestamp(row.CreatedAt),
+	)
 }

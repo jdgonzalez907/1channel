@@ -59,6 +59,7 @@ func (h *ContactWebhookHandler) handleContactWebhook(w http.ResponseWriter, r *h
 			MessageID:         uuid.NewV7(),
 			ExternalMessageID: &req.ExternalMessageID,
 			ExternalContactID: req.ExternalContactID,
+			DisplayName:       req.DisplayName,
 			Text:              *req.Text,
 			ReceivedAt:        at,
 		})

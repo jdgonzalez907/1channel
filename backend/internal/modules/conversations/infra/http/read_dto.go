@@ -5,6 +5,19 @@ import "time"
 type ContactResponse struct {
 	ID         string `json:"id"`
 	ExternalID string `json:"external_id"`
+	Label      string `json:"label"`
+}
+
+type PersonalInformationResponse struct {
+	ID                   string    `json:"id"`
+	IdentificationNumber string    `json:"identification_number"`
+	FirstName            *string   `json:"first_name"`
+	LastName             *string   `json:"last_name"`
+	PhoneNumber          *string   `json:"phone_number"`
+	Email                *string   `json:"email"`
+	Address              *string   `json:"address"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type LastMessageResponse struct {
@@ -40,12 +53,13 @@ type ConversationMessageResponse struct {
 }
 
 type ConversationDetailResponse struct {
-	ID               string                        `json:"id"`
-	Status           string                        `json:"status"`
-	Contact          ContactResponse               `json:"contact"`
-	AgentID          *string                       `json:"agent_id"`
-	UnreadCount      int32                         `json:"unread_count"`
-	Messages         []ConversationMessageResponse `json:"messages"`
-	NextBeforeSentAt *string                       `json:"next_before_sent_at"`
-	NextBeforeID     *string                       `json:"next_before_id"`
+	ID                  string                        `json:"id"`
+	Status              string                        `json:"status"`
+	Contact             ContactResponse               `json:"contact"`
+	PersonalInformation *PersonalInformationResponse  `json:"personal_information"`
+	AgentID             *string                       `json:"agent_id"`
+	UnreadCount         int32                         `json:"unread_count"`
+	Messages            []ConversationMessageResponse `json:"messages"`
+	NextBeforeSentAt    *string                       `json:"next_before_sent_at"`
+	NextBeforeID        *string                       `json:"next_before_id"`
 }

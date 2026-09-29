@@ -108,7 +108,7 @@ watch(
             @click="emit('select', item)"
           >
             <span class="row">
-              <strong class="contact">{{ item.contact.external_id }}</strong>
+              <strong class="contact">{{ item.contact.label }}</strong>
               <span class="status" :class="`status-${item.status}`">{{ item.status }}</span>
             </span>
             <span class="preview">

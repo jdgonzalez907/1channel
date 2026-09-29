@@ -41,8 +41,10 @@ func newRouter(logger *slog.Logger, deps dependencies) http.Handler {
 			r.Use(sharedmiddleware.Auth(deps.userLookup))
 			deps.conversationReadHandler.Register(r)
 			deps.contactReadHandler.Register(r)
+			deps.personalInformationReadHandler.Register(r)
 			deps.userReadHandler.Register(r)
 			deps.conversationWriteHandler.Register(r)
+			deps.personalInformationWriteHandler.Register(r)
 		})
 	})
 

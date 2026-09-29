@@ -31,7 +31,7 @@ func NewReceiveContactMessageDelete(conversationRepository domain.ConversationRe
 }
 
 func (uc *receiveContactMessageDelete) Execute(ctx context.Context, input ReceiveContactMessageDeleteInput) error {
-	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID)
+	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID, nil)
 	if err != nil {
 		return uc.joinErr(err)
 	}

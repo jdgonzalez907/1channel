@@ -31,7 +31,7 @@ func NewReceiveContactMessageRead(conversationRepository domain.ConversationRepo
 }
 
 func (uc *receiveContactMessageRead) Execute(ctx context.Context, input ReceiveContactMessageReadInput) error {
-	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID)
+	contactID, err := uc.contactsAPI.GetOrCreateContactIDByExternalID(ctx, input.ExternalContactID, nil)
 	if err != nil {
 		return uc.joinErr(err)
 	}

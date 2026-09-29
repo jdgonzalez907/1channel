@@ -21,22 +21,43 @@ SELECT
     c.finished_at,
     c.unread_count,
     ct.id AS contact_id,
-    ct.external_contact_id
+    ct.external_contact_id,
+    ct.display_name,
+    pi.id AS pi_id,
+    COALESCE(pi.identification_number, '') AS identification_number,
+    pi.first_name,
+    pi.last_name,
+    pi.phone_number,
+    pi.email,
+    pi.address,
+    pi.created_at AS pi_created_at,
+    pi.updated_at AS pi_updated_at
 FROM conversations c
 JOIN contacts ct ON ct.id = c.contact_id
+LEFT JOIN personal_information pi ON pi.id = ct.personal_information_id
 WHERE c.id = $1
 `
 
 type FindConversationWithContactByIDRow struct {
-	ID                pgtype.UUID
-	Status            string
-	UserID            pgtype.UUID
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-	FinishedAt        pgtype.Timestamptz
-	UnreadCount       int32
-	ContactID         pgtype.UUID
-	ExternalContactID string
+	ID                   pgtype.UUID
+	Status               string
+	UserID               pgtype.UUID
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
+	FinishedAt           pgtype.Timestamptz
+	UnreadCount          int32
+	ContactID            pgtype.UUID
+	ExternalContactID    string
+	DisplayName          *string
+	PiID                 pgtype.UUID
+	IdentificationNumber string
+	FirstName            *string
+	LastName             *string
+	PhoneNumber          *string
+	Email                *string
+	Address              *string
+	PiCreatedAt          pgtype.Timestamptz
+	PiUpdatedAt          pgtype.Timestamptz
 }
 
 func (q *Queries) FindConversationWithContactByID(ctx context.Context, id pgtype.UUID) (FindConversationWithContactByIDRow, error) {
@@ -52,6 +73,16 @@ func (q *Queries) FindConversationWithContactByID(ctx context.Context, id pgtype
 		&i.UnreadCount,
 		&i.ContactID,
 		&i.ExternalContactID,
+		&i.DisplayName,
+		&i.PiID,
+		&i.IdentificationNumber,
+		&i.FirstName,
+		&i.LastName,
+		&i.PhoneNumber,
+		&i.Email,
+		&i.Address,
+		&i.PiCreatedAt,
+		&i.PiUpdatedAt,
 	)
 	return i, err
 }
@@ -159,11 +190,15 @@ SELECT
     c.unread_count,
     ct.id AS contact_id,
     ct.external_contact_id,
+    ct.display_name,
+    pi.first_name,
+    pi.last_name,
     lm.status AS last_message_status,
     lm.text AS last_message_text,
     CASE WHEN lm.user_id IS NOT NULL THEN 'agent' ELSE 'contact' END AS last_message_owner
 FROM conversations c
 JOIN contacts ct ON ct.id = c.contact_id
+LEFT JOIN personal_information pi ON pi.id = ct.personal_information_id
 JOIN messages lm ON lm.id = c.last_message_id
 WHERE (c.user_id IS NULL OR c.user_id = $1)
   AND c.status = ANY($2::text[])
@@ -192,6 +227,9 @@ type ListConversationsForAgentRow struct {
 	UnreadCount       int32
 	ContactID         pgtype.UUID
 	ExternalContactID string
+	DisplayName       *string
+	FirstName         *string
+	LastName          *string
 	LastMessageStatus string
 	LastMessageText   *string
 	LastMessageOwner  string
@@ -220,6 +258,9 @@ func (q *Queries) ListConversationsForAgent(ctx context.Context, arg ListConvers
 			&i.UnreadCount,
 			&i.ContactID,
 			&i.ExternalContactID,
+			&i.DisplayName,
+			&i.FirstName,
+			&i.LastName,
 			&i.LastMessageStatus,
 			&i.LastMessageText,
 			&i.LastMessageOwner,

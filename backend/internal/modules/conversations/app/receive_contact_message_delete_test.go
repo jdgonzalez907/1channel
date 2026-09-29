@@ -37,7 +37,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 				t.Helper()
 				message := buildContactMessage(t, uuid.NewV7(), contactID, strPtr(externalMessageID), nil)
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil, message)
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(nil).Once()
 				return conv
@@ -54,7 +54,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 				t.Helper()
 				message := buildDeletedContactMessage(t, uuid.NewV7(), contactID, externalMessageID)
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil, message)
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(conv, nil).Once()
 				return conv
 			},
@@ -70,7 +70,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 				t.Helper()
 				message := buildContactMessage(t, uuid.NewV7(), contactID, strPtr("wamid.other"), nil)
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil, message)
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(conv, nil).Once()
 				return conv
 			},
@@ -82,7 +82,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 				t.Helper()
 				message := buildAgentMessageWithExternalID(t, uuid.NewV7(), agentID, externalMessageID)
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil, message)
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(conv, nil).Once()
 				return conv
 			},
@@ -92,7 +92,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 			name: "conversation not found",
 			setup: func(t *testing.T, repo *domain.MockConversationRepository, contactsAPI *contacts.MockContactsAPI) *domain.Conversation {
 				t.Helper()
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(nil, nil).Once()
 				return nil
 			},
@@ -102,7 +102,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 			name: "contacts api error",
 			setup: func(t *testing.T, repo *domain.MockConversationRepository, contactsAPI *contacts.MockContactsAPI) *domain.Conversation {
 				t.Helper()
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(uuid.Nil(), contactsErr).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(uuid.Nil(), contactsErr).Once()
 				return nil
 			},
 			wantErr: contactsErr,
@@ -111,7 +111,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 			name: "find error",
 			setup: func(t *testing.T, repo *domain.MockConversationRepository, contactsAPI *contacts.MockContactsAPI) *domain.Conversation {
 				t.Helper()
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(nil, repoErr).Once()
 				return nil
 			},
@@ -123,7 +123,7 @@ func TestReceiveContactMessageDelete_Execute(t *testing.T) {
 				t.Helper()
 				message := buildContactMessage(t, uuid.NewV7(), contactID, strPtr(externalMessageID), nil)
 				conv := buildConversation(t, convID, domain.ConversationStatusAssigned, &agentID, &contactID, nil, message)
-				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID).Return(contactID, nil).Once()
+				contactsAPI.On("GetOrCreateContactIDByExternalID", mock.Anything, externalContactID, mock.Anything).Return(contactID, nil).Once()
 				repo.On("FindWithMessageByExternalID", mock.Anything, externalMessageID).Return(conv, nil).Once()
 				repo.On("Save", mock.Anything, conv).Return(repoErr).Once()
 				return conv

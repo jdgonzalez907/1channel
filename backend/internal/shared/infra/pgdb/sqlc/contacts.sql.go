@@ -12,7 +12,7 @@ import (
 )
 
 const findContactByExternalContactID = `-- name: FindContactByExternalContactID :one
-SELECT id, external_contact_id, created_at
+SELECT id, external_contact_id, display_name, personal_information_id, created_at
 FROM contacts
 WHERE external_contact_id = $1
 `
@@ -20,12 +20,18 @@ WHERE external_contact_id = $1
 func (q *Queries) FindContactByExternalContactID(ctx context.Context, externalContactID string) (Contact, error) {
 	row := q.db.QueryRow(ctx, findContactByExternalContactID, externalContactID)
 	var i Contact
-	err := row.Scan(&i.ID, &i.ExternalContactID, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.ExternalContactID,
+		&i.DisplayName,
+		&i.PersonalInformationID,
+		&i.CreatedAt,
+	)
 	return i, err
 }
 
 const findContactByID = `-- name: FindContactByID :one
-SELECT id, external_contact_id, created_at
+SELECT id, external_contact_id, display_name, personal_information_id, created_at
 FROM contacts
 WHERE id = $1
 `
@@ -33,24 +39,97 @@ WHERE id = $1
 func (q *Queries) FindContactByID(ctx context.Context, id pgtype.UUID) (Contact, error) {
 	row := q.db.QueryRow(ctx, findContactByID, id)
 	var i Contact
-	err := row.Scan(&i.ID, &i.ExternalContactID, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.ExternalContactID,
+		&i.DisplayName,
+		&i.PersonalInformationID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const findContactWithPersonalInformationByID = `-- name: FindContactWithPersonalInformationByID :one
+SELECT
+    ct.id,
+    ct.external_contact_id,
+    ct.display_name,
+    ct.created_at,
+    pi.id AS pi_id,
+    COALESCE(pi.identification_number, '') AS identification_number,
+    pi.first_name,
+    pi.last_name,
+    pi.phone_number,
+    pi.email,
+    pi.address,
+    pi.created_at AS pi_created_at,
+    pi.updated_at AS pi_updated_at
+FROM contacts ct
+LEFT JOIN personal_information pi ON pi.id = ct.personal_information_id
+WHERE ct.id = $1
+`
+
+type FindContactWithPersonalInformationByIDRow struct {
+	ID                   pgtype.UUID
+	ExternalContactID    string
+	DisplayName          *string
+	CreatedAt            pgtype.Timestamptz
+	PiID                 pgtype.UUID
+	IdentificationNumber string
+	FirstName            *string
+	LastName             *string
+	PhoneNumber          *string
+	Email                *string
+	Address              *string
+	PiCreatedAt          pgtype.Timestamptz
+	PiUpdatedAt          pgtype.Timestamptz
+}
+
+func (q *Queries) FindContactWithPersonalInformationByID(ctx context.Context, id pgtype.UUID) (FindContactWithPersonalInformationByIDRow, error) {
+	row := q.db.QueryRow(ctx, findContactWithPersonalInformationByID, id)
+	var i FindContactWithPersonalInformationByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.ExternalContactID,
+		&i.DisplayName,
+		&i.CreatedAt,
+		&i.PiID,
+		&i.IdentificationNumber,
+		&i.FirstName,
+		&i.LastName,
+		&i.PhoneNumber,
+		&i.Email,
+		&i.Address,
+		&i.PiCreatedAt,
+		&i.PiUpdatedAt,
+	)
 	return i, err
 }
 
 const upsertContact = `-- name: UpsertContact :exec
-INSERT INTO contacts (id, external_contact_id, created_at)
-VALUES ($1, $2, $3)
+INSERT INTO contacts (id, external_contact_id, display_name, personal_information_id, created_at)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (id) DO UPDATE SET
-    external_contact_id = EXCLUDED.external_contact_id
+    external_contact_id = EXCLUDED.external_contact_id,
+    display_name = EXCLUDED.display_name,
+    personal_information_id = EXCLUDED.personal_information_id
 `
 
 type UpsertContactParams struct {
-	ID                pgtype.UUID
-	ExternalContactID string
-	CreatedAt         pgtype.Timestamptz
+	ID                    pgtype.UUID
+	ExternalContactID     string
+	DisplayName           *string
+	PersonalInformationID pgtype.UUID
+	CreatedAt             pgtype.Timestamptz
 }
 
 func (q *Queries) UpsertContact(ctx context.Context, arg UpsertContactParams) error {
-	_, err := q.db.Exec(ctx, upsertContact, arg.ID, arg.ExternalContactID, arg.CreatedAt)
+	_, err := q.db.Exec(ctx, upsertContact,
+		arg.ID,
+		arg.ExternalContactID,
+		arg.DisplayName,
+		arg.PersonalInformationID,
+		arg.CreatedAt,
+	)
 	return err
 }

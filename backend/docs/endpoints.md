@@ -75,12 +75,100 @@ curl -s "$BASE/v1/users/$TOKEN" -H "Authorization: Bearer $TOKEN" | jq
 ### GET /v1/contacts/{id}
 
 Requiere auth. `id` es el identificador interno del contacto (no el `external_id`).
+`label` es la etiqueta de presentación: nombre completo de la persona si existe, si no
+`display_name`, si no `external_id`.
 
-- `200` `{"id":"<uuid>","external_id":"<uuid>","created_at":"..."}`
+- `200`:
+
+```json
+{
+  "id": "<uuid>",
+  "external_id": "<uuid>",
+  "label": "Juan Perez",
+  "display_name": null,
+  "personal_information": {
+    "id": "<uuid>",
+    "identification_number": "12345678",
+    "first_name": "Juan",
+    "last_name": "Perez",
+    "phone_number": "5551234",
+    "email": "juan@example.com",
+    "address": null,
+    "created_at": "...",
+    "updated_at": "..."
+  },
+  "created_at": "..."
+}
+```
+
+- `personal_information` es `null` si el contacto no tiene persona.
 - `400` si el `id` no es UUID · `404` si no existe
 
 ```bash
 curl -s "$BASE/v1/contacts/$CTID" -H "Authorization: Bearer $TOKEN" | jq
+```
+
+### GET /v1/personal-information/{identification_number}
+
+Requiere auth. Devuelve la persona por su documento (clave natural, único). Es la lectura que
+usa la consola para buscar una persona.
+
+- `200`:
+
+```json
+{
+  "id": "<uuid>",
+  "identification_number": "12345678",
+  "first_name": "Juan",
+  "last_name": null,
+  "phone_number": null,
+  "email": null,
+  "address": null,
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+- `400` si el documento es vacío, tiene caracteres no permitidos o supera 100 grafemas
+- `404` si no existe · `401` sin token válido
+
+```bash
+curl -s "$BASE/v1/personal-information/12345678" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+### PUT /v1/contacts/{id}/personal-information
+
+Requiere auth. Guarda (upsert) la persona por su documento y la asocia al contacto. Solo
+`identification_number` es obligatorio; los demás datos admiten nulo/vacío (un valor vacío
+queda nulo). El documento es inmutable: si ya existe, se reemplazan sus datos y el contacto
+se asocia a esa misma persona.
+
+Body:
+
+```json
+{
+  "identification_number": "12345678",
+  "first_name": "Juan",
+  "last_name": "Perez",
+  "phone_number": "5551234",
+  "email": "juan@example.com",
+  "address": "Calle 1 #2-3"
+}
+```
+
+- `200` con la persona persistida (`id`, `identification_number`, datos y fechas)
+- `400` si el `id` de la ruta no es UUID o el JSON es inválido
+- `404` si el contacto no existe
+- `422` si el documento es vacío, tiene caracteres no permitidos o supera 100 grafemas, o un
+  dato opcional supera su máximo (100 nombres/teléfono, 254 email/dirección)
+- `401` sin token válido
+
+```bash
+curl -s -X PUT "$BASE/v1/contacts/$CTID/personal-information" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"identification_number":"12345678","first_name":"Juan","last_name":"Perez","phone_number":"5551234","email":"juan@example.com","address":"Calle 1 #2-3"}' | jq
 ```
 
 ---
@@ -112,7 +200,7 @@ solicitante. Las `resolved`/`expired` con agente se listan en `finished` solo pa
     {
       "id": "<uuid>",
       "status": "assigned",
-      "contact": { "id": "<uuid>", "external_id": "<uuid>" },
+      "contact": { "id": "<uuid>", "external_id": "<uuid>", "label": "Juan Perez" },
       "last_message": { "text": "...", "sent_at": "...", "owner": "contact" },
       "unread_count": 2
     }
@@ -155,7 +243,8 @@ es el solicitante.
 {
   "id": "<uuid>",
   "status": "assigned",
-  "contact": { "id": "<uuid>", "external_id": "<uuid>" },
+  "contact": { "id": "<uuid>", "external_id": "<uuid>", "label": "Juan Perez" },
+  "personal_information": null,
   "agent_id": "<uuid>",
   "unread_count": 2,
   "messages": [
@@ -265,6 +354,9 @@ Eventos y campos:
 | `message.deleted`  | requerido             | requerido             | —        |
 | `message.read`     | requerido             | requerido             | —        |
 
+`message.received` acepta además `display_name` (opcional): si viene, se asigna al contacto
+(útil para el nombre que provee el canal); los demás eventos lo ignoran.
+
 - `204` sin cuerpo
 - `400` si el cuerpo no es JSON válido
 - `422` si falta un campo requerido · `200` sin efecto si `event` es desconocido
@@ -274,7 +366,7 @@ Eventos y campos:
 # recibir
 curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
   -H "Content-Type: application/json" \
-  -d '{"event":"message.received","external_contact_id":"5491112345678","external_message_id":"wamid.001","text":"Hola, quiero comprar una consola."}'
+  -d '{"event":"message.received","external_contact_id":"5491112345678","external_message_id":"wamid.001","display_name":"Juan","text":"Hola, quiero comprar una consola."}'
 
 # editar
 curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
@@ -315,7 +407,7 @@ Formato uniforme:
 | 404    | Recurso o ruta inexistente                                    |
 | 405    | Método no permitido para la ruta                              |
 | 409    | Conflicto de estado (conversación finalizada, mensaje failed, etc.) |
-| 422    | Validación (`status` inválido, texto vacío o demasiado largo) |
+| 422    | Validación (`status` inválido, texto vacío o demasiado largo, documento de persona ausente/inválido o un dato que supera su máximo) |
 | 500    | Error interno (incluye un fallo inesperado)                   |
 | 504    | Timeout del request                                           |
 

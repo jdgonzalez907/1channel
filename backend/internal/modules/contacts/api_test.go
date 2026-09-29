@@ -72,7 +72,7 @@ func TestContactsAPI_GetOrCreateContactIDByExternalID(t *testing.T) {
 			api := NewContactsAPI(m, &app.MockFindContactByID{})
 
 			// Act
-			got, err := api.GetOrCreateContactIDByExternalID(context.Background(), tt.extID)
+			got, err := api.GetOrCreateContactIDByExternalID(context.Background(), tt.extID, nil)
 
 			// Assert
 			if tt.wantErr != nil {

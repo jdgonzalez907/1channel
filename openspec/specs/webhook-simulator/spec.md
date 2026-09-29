@@ -80,3 +80,17 @@ El simulador SHALL mostrar el error del servidor (título y detalle de `applicat
 
 - **WHEN** el simulador envía `message.edited`, `message.deleted` o `message.read` con un `external_message_id` inexistente
 - **THEN** muestra el error 404 y conserva los valores del formulario
+
+### Requirement: Nombre del contacto en el evento simulado
+
+El simulador SHALL ofrecer un campo opcional `display_name`, visible y enviado únicamente para `message.received`. El campo SHALL NOT ser obligatorio para enviar el evento.
+
+#### Scenario: Campo visible en recepción
+
+- **WHEN** el agente selecciona `message.received`
+- **THEN** el simulador muestra el campo `display_name` como opcional
+
+#### Scenario: Campo oculto en otros eventos
+
+- **WHEN** el agente selecciona `message.edited`, `message.deleted` o `message.read`
+- **THEN** el simulador no muestra el campo `display_name`

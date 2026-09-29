@@ -24,28 +24,32 @@ import (
 )
 
 type dependencies struct {
-	userWriteHandler         *usershttp.UserWriteHandler
-	userReadHandler          *usershttp.UserReadHandler
-	conversationWriteHandler *convhttp.ConversationWriteHandler
-	contactWebhookHandler    *convhttp.ContactWebhookHandler
-	conversationReadHandler  *convhttp.ConversationReadHandler
-	contactReadHandler       *contactshttp.ContactReadHandler
-	userLookup               sharedmiddleware.UserLookup
+	userWriteHandler                *usershttp.UserWriteHandler
+	userReadHandler                 *usershttp.UserReadHandler
+	conversationWriteHandler        *convhttp.ConversationWriteHandler
+	contactWebhookHandler           *convhttp.ContactWebhookHandler
+	conversationReadHandler         *convhttp.ConversationReadHandler
+	contactReadHandler              *contactshttp.ContactReadHandler
+	personalInformationWriteHandler *contactshttp.PersonalInformationWriteHandler
+	personalInformationReadHandler  *contactshttp.PersonalInformationReadHandler
+	userLookup                      sharedmiddleware.UserLookup
 }
 
 func newDependencies(db *pgdb.DB) dependencies {
 	usersAPI, userWriteHandler := newUsersModule(db)
-	contactsAPI := newContactsModule(db)
+	contactsAPI, personalInformationWriteHandler, personalInformationReadHandler := newContactsModule(db)
 	conversationWriteHandler, contactWebhookHandler := newConversationsModule(db, usersAPI, contactsAPI)
 
 	return dependencies{
-		userWriteHandler:         userWriteHandler,
-		userReadHandler:          usershttp.NewUserReadHandler(db.Queries),
-		conversationWriteHandler: conversationWriteHandler,
-		contactWebhookHandler:    contactWebhookHandler,
-		conversationReadHandler:  convhttp.NewConversationReadHandler(db.Queries),
-		contactReadHandler:       contactshttp.NewContactReadHandler(db.Queries),
-		userLookup:               newUserLookup(db),
+		userWriteHandler:                userWriteHandler,
+		userReadHandler:                 usershttp.NewUserReadHandler(db.Queries),
+		conversationWriteHandler:        conversationWriteHandler,
+		contactWebhookHandler:           contactWebhookHandler,
+		conversationReadHandler:         convhttp.NewConversationReadHandler(db.Queries),
+		contactReadHandler:              contactshttp.NewContactReadHandler(db.Queries),
+		personalInformationWriteHandler: personalInformationWriteHandler,
+		personalInformationReadHandler:  personalInformationReadHandler,
+		userLookup:                      newUserLookup(db),
 	}
 }
 
@@ -71,13 +75,21 @@ func newUsersModule(db *pgdb.DB) (users.UsersAPI, *usershttp.UserWriteHandler) {
 	return users.NewUsersAPI(findUserByID, createUser), usershttp.NewUserWriteHandler(createUser)
 }
 
-func newContactsModule(db *pgdb.DB) contacts.ContactsAPI {
+func newContactsModule(db *pgdb.DB) (contacts.ContactsAPI, *contactshttp.PersonalInformationWriteHandler, *contactshttp.PersonalInformationReadHandler) {
 	contactRepository := contactspg.NewContactRepository(db)
+	personalInformationRepository := contactspg.NewPersonalInformationRepository(db)
 
-	return contacts.NewContactsAPI(
+	contactsAPI := contacts.NewContactsAPI(
 		contactsapp.NewGetOrCreateContactByExternalID(contactRepository),
 		contactsapp.NewFindContactByID(contactRepository),
 	)
+
+	registerContactPersonalInformation := contactsapp.NewRegisterContactPersonalInformation(personalInformationRepository, contactRepository)
+
+	writeHandler := contactshttp.NewPersonalInformationWriteHandler(registerContactPersonalInformation)
+	readHandler := contactshttp.NewPersonalInformationReadHandler(db.Queries)
+
+	return contactsAPI, writeHandler, readHandler
 }
 
 func newConversationsModule(db *pgdb.DB, usersAPI users.UsersAPI, contactsAPI contacts.ContactsAPI) (*convhttp.ConversationWriteHandler, *convhttp.ContactWebhookHandler) {

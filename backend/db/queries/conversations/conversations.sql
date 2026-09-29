@@ -56,9 +56,20 @@ SELECT
     c.finished_at,
     c.unread_count,
     ct.id AS contact_id,
-    ct.external_contact_id
+    ct.external_contact_id,
+    ct.display_name,
+    pi.id AS pi_id,
+    COALESCE(pi.identification_number, '') AS identification_number,
+    pi.first_name,
+    pi.last_name,
+    pi.phone_number,
+    pi.email,
+    pi.address,
+    pi.created_at AS pi_created_at,
+    pi.updated_at AS pi_updated_at
 FROM conversations c
 JOIN contacts ct ON ct.id = c.contact_id
+LEFT JOIN personal_information pi ON pi.id = ct.personal_information_id
 WHERE c.id = $1;
 
 -- name: ListConversationsForAgent :many
@@ -69,11 +80,15 @@ SELECT
     c.unread_count,
     ct.id AS contact_id,
     ct.external_contact_id,
+    ct.display_name,
+    pi.first_name,
+    pi.last_name,
     lm.status AS last_message_status,
     lm.text AS last_message_text,
     CASE WHEN lm.user_id IS NOT NULL THEN 'agent' ELSE 'contact' END AS last_message_owner
 FROM conversations c
 JOIN contacts ct ON ct.id = c.contact_id
+LEFT JOIN personal_information pi ON pi.id = ct.personal_information_id
 JOIN messages lm ON lm.id = c.last_message_id
 WHERE (c.user_id IS NULL OR c.user_id = sqlc.arg('agent_id'))
   AND c.status = ANY(sqlc.arg('statuses')::text[])

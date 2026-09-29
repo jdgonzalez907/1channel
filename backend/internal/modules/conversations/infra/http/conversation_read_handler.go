@@ -152,14 +152,24 @@ func (h *ConversationReadHandler) handleGetConversation(w http.ResponseWriter, r
 	}
 
 	httputil.JSON(w, http.StatusOK, ConversationDetailResponse{
-		ID:               pgdb.UUIDString(conversation.ID),
-		Status:           conversation.Status,
-		Contact:          ContactResponse{ID: pgdb.UUIDString(conversation.ContactID), ExternalID: conversation.ExternalContactID},
-		AgentID:          pgdb.UUIDStringPtr(conversation.UserID),
-		UnreadCount:      conversation.UnreadCount,
-		Messages:         messages,
-		NextBeforeSentAt: nextBeforeSentAt,
-		NextBeforeID:     nextBeforeID,
+		ID:     pgdb.UUIDString(conversation.ID),
+		Status: conversation.Status,
+		Contact: ContactResponse{
+			ID:         pgdb.UUIDString(conversation.ContactID),
+			ExternalID: conversation.ExternalContactID,
+			Label: httputil.ContactLabel(
+				conversation.FirstName,
+				conversation.LastName,
+				conversation.DisplayName,
+				conversation.ExternalContactID,
+			),
+		},
+		PersonalInformation: personalInformationFromConversationRow(conversation),
+		AgentID:             pgdb.UUIDStringPtr(conversation.UserID),
+		UnreadCount:         conversation.UnreadCount,
+		Messages:            messages,
+		NextBeforeSentAt:    nextBeforeSentAt,
+		NextBeforeID:        nextBeforeID,
 	})
 }
 
@@ -246,6 +256,12 @@ func conversationListItemFromRow(row sqlc.ListConversationsForAgentRow) Conversa
 		Contact: ContactResponse{
 			ID:         pgdb.UUIDString(row.ContactID),
 			ExternalID: row.ExternalContactID,
+			Label: httputil.ContactLabel(
+				row.FirstName,
+				row.LastName,
+				row.DisplayName,
+				row.ExternalContactID,
+			),
 		},
 		LastMessage: LastMessageResponse{
 			Text:   lastMessageText,
@@ -253,6 +269,24 @@ func conversationListItemFromRow(row sqlc.ListConversationsForAgentRow) Conversa
 			Owner:  row.LastMessageOwner,
 		},
 		UnreadCount: row.UnreadCount,
+	}
+}
+
+func personalInformationFromConversationRow(row sqlc.FindConversationWithContactByIDRow) *PersonalInformationResponse {
+	if !row.PiID.Valid {
+		return nil
+	}
+
+	return &PersonalInformationResponse{
+		ID:                   pgdb.UUIDString(row.PiID),
+		IdentificationNumber: row.IdentificationNumber,
+		FirstName:            row.FirstName,
+		LastName:             row.LastName,
+		PhoneNumber:          row.PhoneNumber,
+		Email:                row.Email,
+		Address:              row.Address,
+		CreatedAt:            pgdb.FromTimestamp(row.PiCreatedAt),
+		UpdatedAt:            pgdb.FromTimestamp(row.PiUpdatedAt),
 	}
 }
 

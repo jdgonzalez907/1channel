@@ -9,9 +9,11 @@ import (
 )
 
 type Contact struct {
-	ID                pgtype.UUID
-	ExternalContactID string
-	CreatedAt         pgtype.Timestamptz
+	ID                    pgtype.UUID
+	ExternalContactID     string
+	DisplayName           *string
+	PersonalInformationID pgtype.UUID
+	CreatedAt             pgtype.Timestamptz
 }
 
 type Conversation struct {
@@ -40,6 +42,18 @@ type Message struct {
 	ReadAt         pgtype.Timestamptz
 	EditedAt       pgtype.Timestamptz
 	DeletedAt      pgtype.Timestamptz
+}
+
+type PersonalInformation struct {
+	ID                   pgtype.UUID
+	IdentificationNumber string
+	FirstName            *string
+	LastName             *string
+	PhoneNumber          *string
+	Email                *string
+	Address              *string
+	CreatedAt            pgtype.Timestamptz
+	UpdatedAt            pgtype.Timestamptz
 }
 
 type User struct {

@@ -56,8 +56,8 @@ func TestContactWebhookHandler(t *testing.T) {
 		wantStatus int
 	}{
 		{
-			name: "message.received calls receive use case",
-			body: `{"event":"message.received","external_contact_id":"54911","external_message_id":"wamid.1","text":"hola"}`,
+			name: "message.received calls receive use case and propagates display name",
+			body: `{"event":"message.received","external_contact_id":"54911","external_message_id":"wamid.1","display_name":"Juan","text":"hola"}`,
 			setup: func(t *testing.T, m *webhookMocks) {
 				t.Helper()
 				m.receive.On("Execute", mock.Anything, mock.MatchedBy(func(in app.ReceiveContactMessageInput) bool {
@@ -65,8 +65,31 @@ func TestContactWebhookHandler(t *testing.T) {
 						in.MessageID != uuid.Nil() &&
 						in.ExternalContactID == "54911" &&
 						in.ExternalMessageID != nil && *in.ExternalMessageID == "wamid.1" &&
+						in.DisplayName != nil && *in.DisplayName == "Juan" &&
 						in.Text == "hola" &&
 						in.ReceivedAt.Location() == time.UTC
+				})).Return(nil).Once()
+			},
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name: "message.received without display name keeps it empty",
+			body: `{"event":"message.received","external_contact_id":"54911","external_message_id":"wamid.1","text":"hola"}`,
+			setup: func(t *testing.T, m *webhookMocks) {
+				t.Helper()
+				m.receive.On("Execute", mock.Anything, mock.MatchedBy(func(in app.ReceiveContactMessageInput) bool {
+					return in.DisplayName == nil && in.Text == "hola"
+				})).Return(nil).Once()
+			},
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name: "display name is ignored on other events",
+			body: `{"event":"message.edited","external_contact_id":"54911","external_message_id":"wamid.1","display_name":"Juan","text":"hola"}`,
+			setup: func(t *testing.T, m *webhookMocks) {
+				t.Helper()
+				m.edit.On("Execute", mock.Anything, mock.MatchedBy(func(in app.ReceiveContactMessageEditInput) bool {
+					return in.ExternalContactID == "54911" && in.ExternalMessageID == "wamid.1" && in.NewText == "hola"
 				})).Return(nil).Once()
 			},
 			wantStatus: http.StatusNoContent,

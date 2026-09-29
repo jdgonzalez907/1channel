@@ -163,8 +163,8 @@ watch(
       <header class="head">
         <div class="head-info">
           <div class="contact-block">
-            <strong>{{ detail.contact.external_id }}</strong>
-            <span class="conversation-id">{{ detail.id }}</span>
+            <strong>{{ detail.contact.label }}</strong>
+            <span class="conversation-id">{{ detail.contact.external_id }} · {{ detail.id }}</span>
           </div>
           <span class="status" :class="`status-${detail.status}`">{{ detail.status }}</span>
           <span
