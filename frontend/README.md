@@ -1,42 +1,48 @@
 # frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+SPA del agente de 1Channel (Vue 3 + TypeScript + Vite + pnpm). Consume el API REST en
+`/v1` en el mismo origen: en dev Vite proxea `/v1` a `http://localhost:8080`, en producción
+lo hace nginx. Sin dependencias más allá de Vue (`fetch` nativo, sin router ni store).
 
-## Recommended IDE Setup
+## Consola del agente
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+La pantalla tiene dos contenedores: la lista de conversaciones (izquierda) y el detalle
+(derecha), más un modal para simular eventos del contacto por webhook.
 
-## Recommended Browser Setup
+1. Levantá la API y sus datos (desde la raíz del repo):
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+   ```sh
+   make up          # postgres 18
+   make migrate-up
+   make seed        # datos de prueba (solo dev; destructivo)
+   make run-api     # API en :8080
+   ```
 
-## Type Support for `.vue` Imports in TS
+2. Levantá el front:
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+   ```sh
+   make run-web     # Vite con proxy /v1 -> :8080
+   ```
 
-## Customize configuration
+3. Obtené el id de un agente del seed y pegalo en el campo **Id del agente**:
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+   ```sh
+   sudo docker compose -f backend/docker-compose.yml --project-directory backend \
+     exec -T postgres psql -U dev -d 1channel_dev -tAc \
+     "select id from users order by created_at, id limit 1;"
+   ```
 
-## Project Setup
+Con un id válido la consola lista la bandeja (`open` por defecto). Desde la lista podés
+filtrar por `external_contact_id`, paginar con **Cargar más** y abrir el simulador de
+webhook. En el detalle podés responder (solo conversaciones abiertas), resolver (solo
+`assigned`) y ver el historial; al abrir una conversación `assigned` con mensajes sin leer
+se marcan como leídos.
+
+## Scripts
 
 ```sh
 pnpm install
-```
-
-### Compile and Hot-Reload for Development
-
-```sh
-pnpm dev
-```
-
-### Type-Check, Compile and Minify for Production
-
-```sh
-pnpm build
+pnpm dev          # Vite
+pnpm type-check   # vue-tsc --build
+pnpm build        # type-check + build de producción
 ```
