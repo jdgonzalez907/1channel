@@ -1,4 +1,36 @@
 services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DATABASE}
+      TZ: UTC
+      PGTZ: UTC
+    command: ["postgres", "-c", "timezone=UTC", "-c", "log_timezone=UTC"]
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate
+    profiles: ["tools"]
+    volumes:
+      - ./backend/db/migrations:/migrations
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      - migrate
+      - -path=/migrations
+      - -database
+      - postgres://${POSTGRES_USERNAME}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DATABASE}?sslmode=disable
+
   web:
     image: ghcr.io/jdgonzalez907/1channel/web:${WEB_TAG:-latest}
     ports:
@@ -21,6 +53,12 @@ services:
     env_file:
       - path: .env
         required: false
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8080/healthz"]
       interval: 10s
@@ -28,3 +66,6 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
+
+volumes:
+  pgdata:

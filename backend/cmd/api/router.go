@@ -33,6 +33,8 @@ func newRouter(logger *slog.Logger, deps dependencies) http.Handler {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	deps.metaWebhookHandler.Register(router)
+
 	router.Route("/v1", func(r chi.Router) {
 		deps.userWriteHandler.Register(r)
 		deps.contactWebhookHandler.Register(r)

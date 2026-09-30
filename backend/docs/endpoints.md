@@ -384,6 +384,36 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "$BASE/v1/webhooks/1channel" \
   -d '{"event":"message.read","external_contact_id":"5491112345678","external_message_id":"wamid.agent.001"}'
 ```
 
+### GET /webhooks/meta
+
+Público (fuera de `/v1`). Verificación del webhook de Meta. Responde `200` con el valor de
+`hub.challenge` cuando `hub.mode=subscribe` y `hub.verify_token` coincide con
+`META_VERIFY_TOKEN`; en cualquier otro caso `403`.
+
+```bash
+curl -i "$BASE/webhooks/meta?hub.mode=subscribe&hub.verify_token=$META_VERIFY_TOKEN&hub.challenge=1158201444"
+```
+
+### POST /webhooks/meta
+
+Público (fuera de `/v1`). Notificaciones de Meta (Messenger). Valida la firma
+`X-Hub-Signature-256` (HMAC-SHA256 del cuerpo con `META_APP_SECRET`) y procesa `object=page`:
+mensajes de texto entrantes (`message.text`, sin `is_echo`) y ediciones (`message_edit`).
+Ignora con `200` el resto (read, delivery, echo, attachments, postbacks, etc.). El timestamp
+sale del payload (epoch en milisegundos), no del reloj del servidor.
+
+- `200` si el lote se procesa (o el evento se ignora)
+- `401` si falta la firma o no coincide
+- `500` si algún evento falla; Meta reintenta y no garantiza el orden, por eso no se distingue
+  el tipo de error
+
+```bash
+curl -i -X POST "$BASE/webhooks/meta" \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: sha256=<hmac>" \
+  -d '{"object":"page","entry":[{"id":"<PAGE_ID>","time":1458692752478,"messaging":[{"sender":{"id":"<PSID>"},"recipient":{"id":"<PAGE_ID>"},"timestamp":1458692752478,"message":{"mid":"mid.1","text":"hola"}}]}]}'
+```
+
 ---
 
 ## Errores
@@ -423,8 +453,9 @@ curl -s "$BASE/v1/conversations" -H "Authorization: Bearer $TOKEN" | jq   # 422 
 ## Notas
 
 - El `POST /v1/users` es público (bootstrap); el resto exige `Authorization`.
-- Las operaciones del contacto (recibir, editar, eliminar y acuse de lectura) llegan por el
-  webhook de prueba `POST /v1/webhooks/1channel`, público y sin auth. Es la contraparte de
-  prueba de los futuros adaptadores por plataforma (`/v1/webhooks/meta`, `/v1/webhooks/telegram`).
+- Las operaciones del contacto llegan por webhooks públicos: el canal real de Messenger
+  (`GET/POST /webhooks/meta`, fuera de `/v1`) y el canal de prueba `POST /v1/webhooks/1channel`
+  (bajo `/v1`). El simulador soporta recibir/editar/eliminar/leer; el adaptador de Meta, por
+  ahora, solo recibir y editar.
 - Un agente no puede pasar una conversación a `expired` por HTTP (responde `422`).
 - Los `external_id` y los `id` son UUID v7.

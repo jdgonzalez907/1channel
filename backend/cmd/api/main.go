@@ -28,7 +28,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              ":" + httpPort(),
-		Handler:           newRouter(logger, newDependencies(db)),
+		Handler:           newRouter(logger, newDependencies(db, logger)),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,

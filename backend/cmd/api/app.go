@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"uuid"
 
 	"github.com/jackc/pgx/v5"
@@ -13,7 +14,7 @@ import (
 	contactspg "github.com/jdgonzalez907/1channel/internal/modules/contacts/infra/pg"
 	convapp "github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 	convhttp "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/http"
-	"github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/messagesender"
+	convmeta "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/meta"
 	convpg "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/pg"
 	"github.com/jdgonzalez907/1channel/internal/modules/users"
 	usersapp "github.com/jdgonzalez907/1channel/internal/modules/users/app"
@@ -28,6 +29,7 @@ type dependencies struct {
 	userReadHandler                 *usershttp.UserReadHandler
 	conversationWriteHandler        *convhttp.ConversationWriteHandler
 	contactWebhookHandler           *convhttp.ContactWebhookHandler
+	metaWebhookHandler              *convmeta.WebhookHandler
 	conversationReadHandler         *convhttp.ConversationReadHandler
 	contactReadHandler              *contactshttp.ContactReadHandler
 	personalInformationWriteHandler *contactshttp.PersonalInformationWriteHandler
@@ -35,16 +37,17 @@ type dependencies struct {
 	userLookup                      sharedmiddleware.UserLookup
 }
 
-func newDependencies(db *pgdb.DB) dependencies {
+func newDependencies(db *pgdb.DB, logger *slog.Logger) dependencies {
 	usersAPI, userWriteHandler := newUsersModule(db)
 	contactsAPI, personalInformationWriteHandler, personalInformationReadHandler := newContactsModule(db)
-	conversationWriteHandler, contactWebhookHandler := newConversationsModule(db, usersAPI, contactsAPI)
+	conversationWriteHandler, contactWebhookHandler, metaWebhookHandler := newConversationsModule(db, usersAPI, contactsAPI, logger)
 
 	return dependencies{
 		userWriteHandler:                userWriteHandler,
 		userReadHandler:                 usershttp.NewUserReadHandler(db.Queries),
 		conversationWriteHandler:        conversationWriteHandler,
 		contactWebhookHandler:           contactWebhookHandler,
+		metaWebhookHandler:              metaWebhookHandler,
 		conversationReadHandler:         convhttp.NewConversationReadHandler(db.Queries),
 		contactReadHandler:              contactshttp.NewContactReadHandler(db.Queries),
 		personalInformationWriteHandler: personalInformationWriteHandler,
@@ -92,9 +95,10 @@ func newContactsModule(db *pgdb.DB) (contacts.ContactsAPI, *contactshttp.Persona
 	return contactsAPI, writeHandler, readHandler
 }
 
-func newConversationsModule(db *pgdb.DB, usersAPI users.UsersAPI, contactsAPI contacts.ContactsAPI) (*convhttp.ConversationWriteHandler, *convhttp.ContactWebhookHandler) {
+func newConversationsModule(db *pgdb.DB, usersAPI users.UsersAPI, contactsAPI contacts.ContactsAPI, logger *slog.Logger) (*convhttp.ConversationWriteHandler, *convhttp.ContactWebhookHandler, *convmeta.WebhookHandler) {
 	conversationRepository := convpg.NewConversationRepository(db)
-	sendAgentMessage := convapp.NewSendAgentMessage(conversationRepository, usersAPI, contactsAPI, messagesender.NewStubSender())
+	metaConfig := convmeta.NewConfigFromEnv()
+	sendAgentMessage := convapp.NewSendAgentMessage(conversationRepository, usersAPI, contactsAPI, convmeta.NewMessengerSender(metaConfig))
 	agentReadConversation := convapp.NewAgentReadConversation(conversationRepository, usersAPI)
 	resolveConversation := convapp.NewResolveConversation(conversationRepository, usersAPI)
 	receiveContactMessage := convapp.NewReceiveContactMessage(conversationRepository, contactsAPI)
@@ -109,6 +113,12 @@ func newConversationsModule(db *pgdb.DB, usersAPI users.UsersAPI, contactsAPI co
 		receiveContactMessageDelete,
 		receiveContactMessageRead,
 	)
+	metaWebhookHandler := convmeta.NewWebhookHandler(
+		receiveContactMessage,
+		receiveContactMessageEdit,
+		metaConfig,
+		logger,
+	)
 
-	return writeHandler, webhookHandler
+	return writeHandler, webhookHandler, metaWebhookHandler
 }

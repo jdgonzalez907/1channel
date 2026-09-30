@@ -9,7 +9,7 @@ COMPOSE_PROD := $(DOCKER) compose -f docker-compose.prod.yml
 	build build-api build-web \
 	check check-api check-web \
 	up down migrate-up migrate-down migrate-create reset seed \
-	prod-up prod-down
+	prod-up prod-down prod-migrate
 
 # ---------------------------------------------------------------------------
 # Run (dev)
@@ -85,7 +85,7 @@ seed: ## Carga datos de prueba (SOLO dev; destructivo)
 	$(COMPOSE_DEV) exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"' < backend/db/seed/dev_seed.sql
 
 # ---------------------------------------------------------------------------
-# Produccion (web + api; base externa por envs)
+# Produccion (web + api + postgres propios)
 # ---------------------------------------------------------------------------
 
 prod-up: ## Levanta el compose de produccion
@@ -93,6 +93,9 @@ prod-up: ## Levanta el compose de produccion
 
 prod-down: ## Detiene el compose de produccion
 	$(COMPOSE_PROD) down
+
+prod-migrate: ## Aplica migraciones en el compose de produccion
+	$(COMPOSE_PROD) run --rm migrate up
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'

@@ -36,7 +36,7 @@ A contact (customer) talks to the company through a channel; an agent (system us
 │   ├── nginx.conf              # serves the SPA and proxies /v1 -> api:8080
 │   ├── Dockerfile              # image: ghcr.io/<owner>/<repo>/web
 │   └── .env.example            # future VITE_* variables
-├── docker-compose.prod.yml     # web + api only (no DB; configured by envs)
+├── docker-compose.prod.yml     # web + api + postgres propios
 ├── Makefile                    # single interface (backend + frontend)
 ├── openspec/                   # Spec-driven development (source of truth)
 │   ├── specs/                  # Durable capability specs
@@ -71,7 +71,7 @@ A contact (customer) talks to the company through a channel; an agent (system us
 - **Containerization**: Docker + Docker Compose
 - **Frontend**: Vue 3 + TypeScript + Vite + pnpm (Composition API, `<script setup>`), served by nginx in the `web` image
 - **Monorepo**: `backend/` (Go) and `frontend/` (SPA) build and deploy independently (CI filters by `paths`)
-- **Deployment**: production compose with `web` + `api` only; the database is external and configured by envs; TLS is terminated by Cloudflare Tunnel (containers are plain HTTP); deploy by commit sha per component
+- **Deployment**: production compose with `web` + `api` + its own `postgres` (persistent volume); an external database can still be targeted via `POSTGRES_URL`; TLS is terminated by Cloudflare Tunnel (containers are plain HTTP); deploy by commit sha per component
 - **API boundary**: `/v1` is the compatibility contract; the front consumes the API same-origin (no CORS)
 
 ## Domain Model & Business Rules
@@ -141,6 +141,14 @@ An agent cannot `expired` via HTTP (422).
   GET /v1/contacts/{id}
   GET /v1/users/{id}
 ```
+
+### Webhooks (public)
+```
+  GET  /webhooks/meta      -> 200 hub.challenge | 403     (verificación de Meta)
+  POST /webhooks/meta      -> 200 (500 -> Meta reintenta) (mensajes/ediciones de Messenger)
+  POST /v1/webhooks/1channel -> 204                       (simulador de contacto)
+```
+`/webhooks/meta` va en la raíz (fuera de `/v1`); el simulador, bajo `/v1`.
 
 ### Auth & errors
 - `Authorization: Bearer <user id>`; missing/malformed/nonexistent user -> 401. Existence is validated once in `Auth`.
@@ -228,11 +236,16 @@ POSTGRES_PORT=5432
 POSTGRES_DATABASE=1channel_dev
 POSTGRES_USERNAME=dev
 POSTGRES_PASSWORD=dev
+
+META_PAGE_ID=
+META_PAGE_ACCESS_TOKEN=
+META_APP_SECRET=
+META_VERIFY_TOKEN=
 ```
 
 `POSTGRES_URL` is an optional DSN override; when set it takes precedence over the `POSTGRES_*` parts.
 
-Integration variables (`META_*`, `WHATSAPP_*`, `ONECHANNEL_SECRET`) are intentionally absent until the webhook and the real sender exist.
+The `META_*` variables feed the Messenger channel (webhook + Send API). `WHATSAPP_*` / `ONECHANNEL_SECRET` remain absent until those channels exist.
 
 ### Database Setup
 1. Start PostgreSQL: `make up`
@@ -251,13 +264,15 @@ CI has **no database**: tests must not require one. A commit that only touches o
 
 ### Docker Build
 - **`api`** (`backend/Dockerfile`): multi-stage with Go 1.27-alpine; final image Alpine 3.24, non-root user `app`, port 8080.
-- **`web`** (`frontend/Dockerfile`): multi-stage with node:24-alpine (pnpm build) → nginx:1.27-alpine serving `dist/` and proxying `/v1` to `api:8080`.
+- **`web`** (`frontend/Dockerfile`): multi-stage with node:24-alpine (pnpm build) → nginx:1.27-alpine serving `dist/` and proxying `/v1` and `/webhooks` to `api:8080`.
 
 ### Production Deploy
-`docker-compose.prod.yml` runs only `web` + `api`. Images are versioned by sha per component; the database is external and configured by envs injected at compose time (a `.env` on the host, next to the compose file). TLS is terminated by Cloudflare Tunnel, so containers speak plain HTTP (`web` listens on `:80`, `api` stays internal on `:8080`).
+`docker-compose.prod.yml` runs `web`, `api` and its own `postgres` (persistent `pgdata` volume); a `migrate` service under the `tools` profile applies migrations. Images are versioned by sha per component; the DB connection comes from envs injected at compose time (a `.env` on the host, next to the compose file) and defaults to the compose `postgres` unless `POSTGRES_URL` is set. TLS is terminated by Cloudflare Tunnel, so containers speak plain HTTP (`web` listens on `:80`, `api` stays internal on `:8080`).
 
 ```bash
-# 1) Migrate FIRST (manual; the host has no `migrate` binary)
+# 1) Migrate FIRST (manual)
+make prod-migrate
+# external DB instead of the compose one: point POSTGRES_URL at it and run
 docker run --rm -v "$PWD/backend/db/migrations:/migrations" \
   migrate/migrate -path=/migrations -database "$POSTGRES_URL" up
 
@@ -471,9 +486,9 @@ sqlc generate
 - **Timestamps are UTC**; Response DTOs use `time.Time`.
 - **App runs on the host** against `localhost`; `postgres` only exists inside Compose.
 - **The Go module lives in `backend/`**; use `go -C backend ...` or the root `Makefile`.
-- **Production** is `docker-compose.prod.yml` with only `web` + `api`; the database is external via envs; TLS is terminated by Cloudflare Tunnel. Migrations in production are run manually, before deploying.
+- **Production** is `docker-compose.prod.yml` with `web` + `api` + its own `postgres`; an external DB can still be set via `POSTGRES_URL`; TLS is terminated by Cloudflare Tunnel. Migrations in production are run manually (`make prod-migrate`), before deploying.
 - **OpenSpec specs are authoritative** for behavior.
 
 ---
 
-*This guide is maintained for AI agents working on the 1Channel project. Last updated: 2026-09-27*
+*This guide is maintained for AI agents working on the 1Channel project. Last updated: 2026-09-29*

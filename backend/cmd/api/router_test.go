@@ -16,6 +16,7 @@ import (
 	contactshttp "github.com/jdgonzalez907/1channel/internal/modules/contacts/infra/http"
 	"github.com/jdgonzalez907/1channel/internal/modules/conversations/app"
 	convhttp "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/http"
+	convmeta "github.com/jdgonzalez907/1channel/internal/modules/conversations/infra/meta"
 	usersapp "github.com/jdgonzalez907/1channel/internal/modules/users/app"
 	usershttp "github.com/jdgonzalez907/1channel/internal/modules/users/infra/http"
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/http/httperror"
@@ -37,6 +38,7 @@ func newTestRouter() http.Handler {
 		userReadHandler:          usershttp.NewUserReadHandler(sqlc.New(nil)),
 		conversationWriteHandler: conversationWriteHandler,
 		contactWebhookHandler:    contactWebhookHandler,
+		metaWebhookHandler:       newTestMetaWebhookHandler(),
 		conversationReadHandler:  convhttp.NewConversationReadHandler(sqlc.New(nil)),
 		contactReadHandler:       contactshttp.NewContactReadHandler(sqlc.New(nil)),
 	})
@@ -48,6 +50,15 @@ func newTestContactWebhookHandler() *convhttp.ContactWebhookHandler {
 		&app.MockReceiveContactMessageEdit{},
 		&app.MockReceiveContactMessageDelete{},
 		&app.MockReceiveContactMessageRead{},
+	)
+}
+
+func newTestMetaWebhookHandler() *convmeta.WebhookHandler {
+	return convmeta.NewWebhookHandler(
+		&app.MockReceiveContactMessage{},
+		&app.MockReceiveContactMessageEdit{},
+		convmeta.Config{},
+		slog.New(slog.NewTextHandler(io.Discard, nil)),
 	)
 }
 
@@ -108,6 +119,7 @@ func TestRouter_ContactWebhookIsPublic(t *testing.T) {
 			&app.MockReceiveContactMessageDelete{},
 			&app.MockReceiveContactMessageRead{},
 		),
+		metaWebhookHandler:      newTestMetaWebhookHandler(),
 		userReadHandler:         usershttp.NewUserReadHandler(sqlc.New(nil)),
 		conversationReadHandler: convhttp.NewConversationReadHandler(sqlc.New(nil)),
 		contactReadHandler:      contactshttp.NewContactReadHandler(sqlc.New(nil)),
@@ -158,6 +170,7 @@ func TestRouter_CreateUserIsPublic(t *testing.T) {
 		userReadHandler:         usershttp.NewUserReadHandler(sqlc.New(nil)),
 		conversationReadHandler: convhttp.NewConversationReadHandler(sqlc.New(nil)),
 		contactReadHandler:      contactshttp.NewContactReadHandler(sqlc.New(nil)),
+		metaWebhookHandler:      newTestMetaWebhookHandler(),
 		userLookup:              func(context.Context, uuid.UUID) error { return nil },
 	})
 

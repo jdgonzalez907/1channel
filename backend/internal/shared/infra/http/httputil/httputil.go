@@ -11,10 +11,10 @@ import (
 	"github.com/jdgonzalez907/1channel/internal/shared/infra/pgdb"
 )
 
-const maxBodyBytes = 1024 * 1024
+const MaxBodyBytes = 1024 * 1024
 
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxBodyBytes)
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
