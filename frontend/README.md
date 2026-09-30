@@ -1,13 +1,37 @@
 # frontend
 
-SPA del agente de 1Channel (Vue 3 + TypeScript + Vite + pnpm). Consume el API REST en
+SPA de 1Channel (Vue 3 + TypeScript + Vite + pnpm + vue-router). Consume el API REST en
 `/v1` en el mismo origen: en dev Vite proxea `/v1` a `http://localhost:8080`, en producción
-lo hace nginx. Sin dependencias más allá de Vue (`fetch` nativo, sin router ni store).
+lo hace nginx. Más allá de Vue y vue-router no hay dependencias (`fetch` nativo, sin store).
+
+## Rutas
+
+| Ruta         | Página                          | Acceso   |
+| ------------ | ------------------------------- | -------- |
+| `/`          | Landing pública (B2B)           | público  |
+| `/consola`   | Consola del agente              | id agente |
+| `/privacidad`| Política de privacidad          | público  |
+| `/terminos`  | Términos y condiciones          | público  |
+
+La landing y las páginas legales comparten un layout público con encabezado y pie; la
+consola queda fuera de ese layout. Una ruta desconocida resuelve a la landing. Las URLs
+son direccionables: recargar `/privacidad` o `/consola` funciona porque nginx y Vite
+resuelven a `index.html` (SPA fallback).
+
+Los textos de **privacidad** y **términos** son un **borrador pendiente de revisión legal**
+(ver la nota visible en cada página); no son asesoría jurídica.
+
+## Sitio público
+
+La landing se sirve en `/` sin credenciales. El color de acento del sitio público es
+`#7540BF`, definido en `src/assets/theme.css` sobre el contenedor `.public-site` para no
+afectar a la consola. El identificador visual de la consola no cambia.
 
 ## Consola del agente
 
-La pantalla tiene dos contenedores: la lista de conversaciones (izquierda) y el detalle
-(derecha), más un modal para simular eventos del contacto por webhook.
+La consola se sirve en `/consola` y tiene tres contenedores: la lista de conversaciones
+(izquierda), el detalle (centro) y la persona del contacto (derecha), más un modal para
+simular eventos del contacto por webhook.
 
 1. Levantá la API y sus datos (desde la raíz del repo):
 
